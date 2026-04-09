@@ -114,7 +114,6 @@ const THEMES={
 }
 
 const DEFAULT_PROFILES=[
-  {id:'p2',name:'Java',          role:'Java Developer'},
   {id:'p3',name:'Data Engineer', role:'Data Engineering'},
   {id:'p4',name:'Data Analytics',role:'Analytics'},
   {id:'p5',name:'Data Science',  role:'Data Science'},
@@ -217,6 +216,94 @@ function ThemePicker({theme,setTheme}){
   </div>
 }
 
+// ─── Drag Profile Switcher ────────────────────────────────────────
+function DragProfileSwitcher({profiles,selected,onSelect,onReorder}){
+  const[open,setOpen]=useState(false)
+  const[dragIdx,setDragIdx]=useState(null)
+  const[dragOver,setDragOver]=useState(null)
+  const[localOrder,setLocalOrder]=useState(()=>{
+    try{const s=localStorage.getItem('slotbook-profile-order');return s?JSON.parse(s):null}catch{return null}
+  })
+  const ref=useRef()
+  useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)}
+    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h)
+  },[])
+
+  const orderedProfiles=()=>{
+    if(!localOrder)return profiles
+    const map=Object.fromEntries(profiles.map(p=>[p.id,p]))
+    const ordered=localOrder.map(id=>map[id]).filter(Boolean)
+    const newOnes=profiles.filter(p=>!localOrder.includes(p.id))
+    return[...ordered,...newOnes]
+  }
+  const sorted=orderedProfiles()
+  const cur=profiles.find(p=>p.id===selected)||profiles[0]
+
+  function onDragStart(e,i){setDragIdx(i);e.dataTransfer.effectAllowed='move'}
+  function onDragEnter(i){setDragOver(i)}
+  function onDrop(e,i){
+    e.preventDefault()
+    if(dragIdx===null||dragIdx===i){setDragIdx(null);setDragOver(null);return}
+    const arr=[...sorted]
+    const[moved]=arr.splice(dragIdx,1)
+    arr.splice(i,0,moved)
+    const newOrder=arr.map(p=>p.id)
+    setLocalOrder(newOrder)
+    localStorage.setItem('slotbook-profile-order',JSON.stringify(newOrder))
+    onReorder&&onReorder(arr)
+    setDragIdx(null);setDragOver(null)
+  }
+  function onDragEnd(){setDragIdx(null);setDragOver(null)}
+
+  return<div ref={ref} style={{position:'relative'}}>
+    <button onClick={()=>setOpen(o=>!o)} title="Switch Profile" style={{display:'flex',alignItems:'center',gap:7,padding:'6px 11px',background:'rgba(255,255,255,.85)',border:'1px solid rgba(200,192,178,.45)',borderRadius:8,cursor:'pointer',fontFamily:'DM Sans,sans-serif',fontSize:11,color:'#1a1714',fontWeight:600,transition:'all .2s',whiteSpace:'nowrap'}}>
+      <span style={{fontSize:14,display:'flex',flexDirection:'column',gap:2,opacity:.6}}>
+        <span style={{display:'block',width:14,height:1.5,background:'currentColor',borderRadius:2}}/>
+        <span style={{display:'block',width:10,height:1.5,background:'currentColor',borderRadius:2}}/>
+        <span style={{display:'block',width:12,height:1.5,background:'currentColor',borderRadius:2}}/>
+      </span>
+      <span style={{fontSize:11}}>{cur?.name||'Profile'}</span>
+      <span style={{fontSize:9,opacity:.5}}>{open?'▲':'▼'}</span>
+    </button>
+    {open&&<div style={{position:'absolute',top:'calc(100% + 8px)',right:0,background:'#fff',border:'1px solid rgba(200,192,178,.35)',borderRadius:14,boxShadow:'0 16px 48px rgba(80,60,40,.18)',zIndex:9999,minWidth:220,overflow:'hidden',animation:'scaleIn .18s ease both'}}>
+      <div style={{padding:'7px 12px',borderBottom:'1px solid rgba(200,192,178,.2)',fontSize:9,color:'rgba(90,82,72,.45)',textTransform:'uppercase',letterSpacing:'1px',fontFamily:'Syne,sans-serif',fontWeight:700,display:'flex',alignItems:'center',gap:6}}>
+        <span>Switch Profile</span>
+        <span style={{marginLeft:'auto',fontSize:9,color:'rgba(90,82,72,.3)',fontWeight:400,fontStyle:'italic'}}>drag to reorder</span>
+      </div>
+      {sorted.map((p,i)=>{
+        const isSelected=p.id===selected
+        const isDragging=dragIdx===i
+        const isOver=dragOver===i&&dragIdx!==i
+        const accent='#c2692a'
+        return<div key={p.id}
+          draggable
+          onDragStart={e=>onDragStart(e,i)}
+          onDragEnter={()=>onDragEnter(i)}
+          onDragOver={e=>e.preventDefault()}
+          onDrop={e=>onDrop(e,i)}
+          onDragEnd={onDragEnd}
+          onClick={()=>{onSelect(p.id);setOpen(false)}}
+          style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',cursor:'grab',
+            background:isDragging?'rgba(194,105,42,.06)':isSelected?`${accent}14`:isOver?'rgba(194,105,42,.08)':'transparent',
+            borderLeft:`3px solid ${isSelected?accent:isOver?'rgba(194,105,42,.4)':'transparent'}`,
+            transition:'background .1s',opacity:isDragging?.5:1,
+            borderTop:isOver?'2px solid rgba(194,105,42,.5)':'2px solid transparent'}}>
+          <span style={{display:'flex',flexDirection:'column',gap:2,opacity:.3,cursor:'grab',flexShrink:0}}>
+            {[0,1,2].map(r=><span key={r} style={{display:'block',width:12,height:1.5,background:'#1a1714',borderRadius:1}}/>)}
+          </span>
+          <Avatar name={p.name} size={28}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{p.name}</div>
+            <div style={{fontSize:10,color:'rgba(90,82,72,.5)',marginTop:1}}>{p.role}</div>
+          </div>
+          {isSelected&&<span style={{color:accent,fontSize:13,fontWeight:800,marginLeft:'auto'}}>✓</span>}
+        </div>
+      })}
+    </div>}
+  </div>
+}
+
 // ─── Avatar ───────────────────────────────────────────────────────
 function Avatar({name,size=28,style={}}){
   const[bg,fg]=avatarColor(name)
@@ -306,26 +393,31 @@ function Toast({msg,type='success',onClose}){
 
 // ─── Scrolling Notice Banner ──────────────────────────────────────
 function NoticeBanner({notices,onClickNotice}){
-  const[idx,setIdx]=useState(0)
   const active=notices.filter(n=>n.active!==false)
-  useEffect(()=>{
-    if(active.length<=1)return
-    const t=setInterval(()=>setIdx(i=>(i+1)%active.length),4000)
-    return()=>clearInterval(t)
-  },[active.length])
   if(!active.length)return null
-  const n=active[idx%active.length]
-  return<div style={{background:'linear-gradient(90deg,rgba(194,105,42,.1),rgba(30,160,120,.08))',borderBottom:'1px solid rgba(194,105,42,.15)',padding:'0 1.5rem',height:36,display:'flex',alignItems:'center',gap:10,cursor:'pointer',overflow:'hidden'}} onClick={()=>onClickNotice(n)}>
-    <span style={{fontSize:10,fontWeight:800,color:'#c2692a',fontFamily:'Syne,sans-serif',textTransform:'uppercase',letterSpacing:'1px',flexShrink:0,background:'rgba(194,105,42,.12)',border:'1px solid rgba(194,105,42,.25)',borderRadius:10,padding:'2px 8px'}}>📢 Notice</span>
+  // Build a long repeated string for seamless loop
+  const tickerItems=active.map(n=>`📢  ${n.title}  —  ${n.message.slice(0,90)}${n.message.length>90?'…':''}`)
+  const fullText=[...tickerItems,...tickerItems,...tickerItems].join('     ✦     ')
+  return<div style={{background:'linear-gradient(90deg,rgba(194,105,42,.13) 0%,rgba(30,160,120,.09) 50%,rgba(194,105,42,.08) 100%)',borderBottom:'1px solid rgba(194,105,42,.2)',height:38,display:'flex',alignItems:'center',overflow:'hidden',position:'relative',cursor:'pointer'}} onClick={()=>onClickNotice(active[0])}>
+    {/* Left fade + label */}
+    <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:0,zIndex:2,position:'relative'}}>
+      <div style={{width:14,background:'rgba(194,105,42,.13)'}}/>
+      <span style={{fontSize:9,fontWeight:800,color:'#c2692a',fontFamily:'Syne,sans-serif',textTransform:'uppercase',letterSpacing:'1.2px',background:'rgba(194,105,42,.15)',border:'1px solid rgba(194,105,42,.3)',borderRadius:10,padding:'3px 10px',whiteSpace:'nowrap',flexShrink:0}}>LIVE</span>
+      <div style={{width:1,height:22,background:'rgba(194,105,42,.2)',margin:'0 10px'}}/>
+    </div>
+    {/* Scrolling text */}
     <div style={{flex:1,overflow:'hidden',position:'relative'}}>
-      <div key={n.id} style={{fontSize:12,color:'#1a1714',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',animation:'fadeUp .3s ease both'}}>
-        {n.title} — <span style={{color:'rgba(90,82,72,.6)'}}>{n.message.slice(0,80)}{n.message.length>80?'…':''}</span>
+      <div style={{display:'inline-block',whiteSpace:'nowrap',animation:'tickerScroll 42s linear infinite',fontSize:11.5,color:'#1a1714',fontWeight:500,letterSpacing:'.1px',lineHeight:'38px'}}>
+        {fullText}
       </div>
     </div>
-    <span style={{fontSize:10,color:'rgba(194,105,42,.7)',fontFamily:'Syne,sans-serif',fontWeight:600,flexShrink:0}}>Click to read →</span>
-    {active.length>1&&<div style={{display:'flex',gap:3,flexShrink:0}}>
-      {active.map((_,i)=><div key={i} style={{width:i===idx%active.length?16:5,height:5,borderRadius:3,background:i===idx%active.length?'#c2692a':'rgba(194,105,42,.25)',transition:'all .3s'}}/>)}
-    </div>}
+    {/* Right fade + cta */}
+    <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:0,zIndex:2}}>
+      <div style={{width:60,background:'linear-gradient(to right,transparent,rgba(245,243,238,.95))',pointerEvents:'none'}}/>
+      <div style={{background:'rgba(194,105,42,.12)',borderLeft:'1px solid rgba(194,105,42,.2)',padding:'0 14px',height:38,display:'flex',alignItems:'center',gap:5}}>
+        <span style={{fontSize:10,color:'#c2692a',fontFamily:'Syne,sans-serif',fontWeight:700,whiteSpace:'nowrap'}}>Read →</span>
+      </div>
+    </div>
   </div>
 }
 
@@ -963,7 +1055,7 @@ export default function App(){
   const[theme,setTheme]=useState(()=>localStorage.getItem('slotbook-theme')||'default')
   const[userName,setUserName]=useState(null)
   const[userPhone,setUserPhone]=useState('')
-  const[profileId,setProfileId]=useState(null)
+  const[profileId,setProfileId]=useState('p3')
   const[screen,setScreen]=useState('user')
   const[showName,setShowName]=useState(false)
   const[bookMod,setBookMod]=useState(null)
@@ -1114,6 +1206,7 @@ export default function App(){
         </div>
         <div style={{display:'flex',alignItems:'center',gap:9}}>
           <ThemePicker theme={theme} setTheme={setTheme}/>
+          <DragProfileSwitcher profiles={profiles} selected={profileId} onSelect={pid=>setProfileId(pid)} onReorder={()=>{}}/>
           {userName&&<div style={{display:'flex',background:'rgba(255,255,255,.72)',border:'1px solid rgba(200,192,178,.4)',borderRadius:20,padding:'4px 12px 4px 8px',fontSize:12,color:'rgba(90,82,72,.78)',alignItems:'center',gap:7}}>
             <Avatar name={userName} size={22}/>{userName}
           </div>}
