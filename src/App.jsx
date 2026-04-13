@@ -113,6 +113,31 @@ const THEMES={
   },
 }
 
+// ─── Admin Themes ─────────────────────────────────────────────────
+const ADMIN_THEMES={
+  peach:{
+    name:'Peach Cream',
+    bg:'#fff8f4',surface:'rgba(255,255,255,.97)',header:'rgba(255,248,244,.98)',
+    border:'rgba(220,140,100,.18)',text:'#2a1208',muted:'rgba(140,80,40,.45)',
+    accent:'#d97741',accent2:'#f4a96a',todayBg:'#d97741',todayColor:'#fff',
+    btn:'linear-gradient(135deg,#d97741,#f4a96a)',
+  },
+  blush:{
+    name:'Rose Blush',
+    bg:'#fff5f7',surface:'rgba(255,255,255,.97)',header:'rgba(255,245,247,.98)',
+    border:'rgba(210,100,130,.16)',text:'#2a0a14',muted:'rgba(160,60,90,.42)',
+    accent:'#e05a82',accent2:'#f9a8bf',todayBg:'#e05a82',todayColor:'#fff',
+    btn:'linear-gradient(135deg,#e05a82,#f9a8bf)',
+  },
+  sky:{
+    name:'Sky Mist',
+    bg:'#f5f9ff',surface:'rgba(255,255,255,.97)',header:'rgba(245,249,255,.98)',
+    border:'rgba(80,140,220,.16)',text:'#08203a',muted:'rgba(40,90,160,.42)',
+    accent:'#3b82f6',accent2:'#93c5fd',todayBg:'#2563eb',todayColor:'#fff',
+    btn:'linear-gradient(135deg,#3b82f6,#93c5fd)',
+  },
+}
+
 const DEFAULT_PROFILES=[
   {id:'p3',name:'Data Engineer', role:'Data Engineering'},
   {id:'p4',name:'Data Analytics',role:'Analytics'},
@@ -182,6 +207,93 @@ function convertTimeTZ(time24,fromTZ,toTZ){
   }catch{return''}
 }
 
+// ─── Drag Profile Switcher ────────────────────────────────────────
+function DragProfileSwitcher({profiles,selected,onSelect}){
+  const[open,setOpen]=useState(false)
+  const[dragIdx,setDragIdx]=useState(null)
+  const[dragOver,setDragOver]=useState(null)
+  const[order,setOrder]=useState(null)
+  const ref=useRef()
+  useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)}
+    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h)
+  },[])
+  const sorted=order?order.map(id=>profiles.find(p=>p.id===id)).filter(Boolean).concat(profiles.filter(p=>!order.includes(p.id))):profiles
+  const cur=profiles.find(p=>p.id===selected)||profiles[0]
+  function onDragStart(e,i){setDragIdx(i);e.dataTransfer.effectAllowed='move'}
+  function onDrop(e,i){
+    e.preventDefault()
+    if(dragIdx===null||dragIdx===i){setDragIdx(null);setDragOver(null);return}
+    const arr=[...sorted];const[m]=arr.splice(dragIdx,1);arr.splice(i,0,m)
+    setOrder(arr.map(p=>p.id));setDragIdx(null);setDragOver(null)
+  }
+  return<div ref={ref} style={{position:'relative'}}>
+    <button onClick={()=>setOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:7,padding:'6px 11px',background:'rgba(255,255,255,.85)',border:'1px solid rgba(200,192,178,.45)',borderRadius:8,cursor:'pointer',fontFamily:'DM Sans,sans-serif',fontSize:11,color:'#1a1714',fontWeight:600,transition:'all .2s',whiteSpace:'nowrap'}}>
+      <span style={{display:'flex',flexDirection:'column',gap:2.5}}>
+        {[14,10,12].map((w,i)=><span key={i} style={{display:'block',width:w,height:1.5,background:'#1a1714',borderRadius:2,opacity:.6}}/>)}
+      </span>
+      <span style={{fontSize:11}}>{cur?.name||'Profile'}</span>
+      <span style={{fontSize:9,opacity:.5}}>{open?'▲':'▼'}</span>
+    </button>
+    {open&&<div style={{position:'absolute',top:'calc(100% + 8px)',right:0,background:'#fff',border:'1px solid rgba(200,192,178,.35)',borderRadius:14,boxShadow:'0 16px 48px rgba(80,60,40,.18)',zIndex:9999,minWidth:220,overflow:'hidden',animation:'scaleIn .18s ease both'}}>
+      <div style={{padding:'7px 12px',borderBottom:'1px solid rgba(200,192,178,.2)',fontSize:9,color:'rgba(90,82,72,.45)',textTransform:'uppercase',letterSpacing:'1px',fontFamily:'Syne,sans-serif',fontWeight:700,display:'flex',alignItems:'center',gap:4}}>
+        Switch Profile<span style={{marginLeft:'auto',opacity:.4,fontWeight:400,fontStyle:'italic',fontSize:9}}>drag to reorder</span>
+      </div>
+      {sorted.map((p,i)=>{
+        const isSel=p.id===selected;const accent='#c2692a'
+        return<div key={p.id} draggable onDragStart={e=>onDragStart(e,i)} onDragEnter={()=>setDragOver(i)} onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,i)} onDragEnd={()=>{setDragIdx(null);setDragOver(null)}} onClick={()=>{onSelect(p.id);setOpen(false)}}
+          style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',cursor:'grab',background:isSel?`${accent}14`:dragOver===i&&dragIdx!==i?`${accent}08`:'transparent',borderLeft:`3px solid ${isSel?accent:'transparent'}`,borderTop:`2px solid ${dragOver===i&&dragIdx!==i?`${accent}60`:'transparent'}`,transition:'background .1s',opacity:dragIdx===i?.4:1}}>
+          <span style={{display:'flex',flexDirection:'column',gap:2,opacity:.3,flexShrink:0}}>
+            {[0,1,2].map(r=><span key={r} style={{display:'block',width:12,height:1.5,background:'#1a1714',borderRadius:1}}/>)}
+          </span>
+          <Avatar name={p.name} size={28}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{p.name}</div>
+            <div style={{fontSize:10,color:'rgba(90,82,72,.45)',marginTop:1}}>{p.role}</div>
+          </div>
+          {isSel&&<span style={{color:accent,fontSize:13,fontWeight:800,marginLeft:'auto'}}>✓</span>}
+        </div>
+      })}
+    </div>}
+  </div>
+}
+
+// ─── Description Modal ────────────────────────────────────────────
+function DescModal({booking,profiles,onClose}){
+  if(!booking)return null
+  const prof=profiles.find(p=>p.id===booking.profileId)
+  const m=TC[booking.type]||TC.other
+  return<div className="overlay open" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="card" style={{width:'100%',maxWidth:480,animation:'scaleIn .22s ease both'}}>
+      <div style={{padding:'1.4rem 1.7rem',borderBottom:'1px solid rgba(200,192,178,.22)',background:`linear-gradient(135deg,${m.bg},transparent)`}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span className="tag" style={{background:m.bg,color:m.color,border:`1px solid ${m.border}`}}>{booking.type}</span>
+            {prof&&<div style={{display:'flex',alignItems:'center',gap:6}}><Avatar name={prof.name} size={20}/><span style={{fontSize:11,color:'rgba(90,82,72,.6)',fontWeight:600}}>{prof.name}</span></div>}
+          </div>
+          <button className="btn-soft" onClick={onClose} style={{width:30,height:30,borderRadius:8,fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',padding:0}}>✕</button>
+        </div>
+        <h2 style={{fontFamily:'Syne,sans-serif',fontSize:'1.2rem',fontWeight:800,color:'#1a1714',marginTop:10,letterSpacing:'-.3px'}}>{booking.title}</h2>
+        <p style={{fontSize:11,color:'rgba(90,82,72,.45)',marginTop:4}}>{dDate(booking.date)} · {dTime(booking.startTime)} – {dTime(booking.endTime)} IST</p>
+      </div>
+      <div style={{padding:'1.5rem 1.7rem'}}>
+        <label className="lbl">Full Description</label>
+        <p style={{fontSize:14,color:'rgba(90,82,72,.85)',lineHeight:1.75,whiteSpace:'pre-wrap',background:'rgba(245,244,240,.6)',border:'1px solid rgba(200,192,178,.25)',borderRadius:10,padding:'12px 14px',minHeight:80}}>{booking.desc||<span style={{opacity:.35,fontStyle:'italic'}}>No description provided.</span>}</p>
+        <div style={{marginTop:14,display:'flex',gap:8,flexWrap:'wrap'}}>
+          <div style={{flex:1,minWidth:120,background:'rgba(245,244,240,.7)',borderRadius:8,padding:'8px 12px'}}>
+            <div style={{fontSize:9,color:'rgba(90,82,72,.4)',textTransform:'uppercase',letterSpacing:1,fontWeight:700,marginBottom:3}}>Booked By</div>
+            <div style={{fontSize:12,fontWeight:700,color:'#1a1714'}}>{booking.bookedBy}</div>
+            {booking.userPhone&&<div style={{fontSize:11,color:'rgba(90,82,72,.5)',marginTop:1}}>{booking.userPhone}</div>}
+          </div>
+        </div>
+      </div>
+      <div style={{padding:'1rem 1.7rem',borderTop:'1px solid rgba(200,192,178,.18)',display:'flex',justifyContent:'flex-end'}}>
+        <button className="btn-dark" onClick={onClose} style={{padding:'9px 22px',borderRadius:10,fontSize:13}}>Close</button>
+      </div>
+    </div>
+  </div>
+}
+
 // ─── Theme Picker ─────────────────────────────────────────────────
 function ThemePicker({theme,setTheme}){
   const[open,setOpen]=useState(false)
@@ -210,94 +322,6 @@ function ThemePicker({theme,setTheme}){
             </div>
           </div>
           {key===theme&&<span style={{marginLeft:'auto',color:accent,fontSize:13,fontWeight:800}}>✓</span>}
-        </div>
-      })}
-    </div>}
-  </div>
-}
-
-// ─── Drag Profile Switcher ────────────────────────────────────────
-function DragProfileSwitcher({profiles,selected,onSelect,onReorder}){
-  const[open,setOpen]=useState(false)
-  const[dragIdx,setDragIdx]=useState(null)
-  const[dragOver,setDragOver]=useState(null)
-  const[localOrder,setLocalOrder]=useState(()=>{
-    try{const s=localStorage.getItem('slotbook-profile-order');return s?JSON.parse(s):null}catch{return null}
-  })
-  const ref=useRef()
-  useEffect(()=>{
-    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)}
-    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h)
-  },[])
-
-  const orderedProfiles=()=>{
-    if(!localOrder)return profiles
-    const map=Object.fromEntries(profiles.map(p=>[p.id,p]))
-    const ordered=localOrder.map(id=>map[id]).filter(Boolean)
-    const newOnes=profiles.filter(p=>!localOrder.includes(p.id))
-    return[...ordered,...newOnes]
-  }
-  const sorted=orderedProfiles()
-  const cur=profiles.find(p=>p.id===selected)||profiles[0]
-
-  function onDragStart(e,i){setDragIdx(i);e.dataTransfer.effectAllowed='move'}
-  function onDragEnter(i){setDragOver(i)}
-  function onDrop(e,i){
-    e.preventDefault()
-    if(dragIdx===null||dragIdx===i){setDragIdx(null);setDragOver(null);return}
-    const arr=[...sorted]
-    const[moved]=arr.splice(dragIdx,1)
-    arr.splice(i,0,moved)
-    const newOrder=arr.map(p=>p.id)
-    setLocalOrder(newOrder)
-    localStorage.setItem('slotbook-profile-order',JSON.stringify(newOrder))
-    onReorder&&onReorder(arr)
-    setDragIdx(null);setDragOver(null)
-  }
-  function onDragEnd(){setDragIdx(null);setDragOver(null)}
-
-  return<div ref={ref} style={{position:'relative'}}>
-    <button onClick={()=>setOpen(o=>!o)} title="Switch Profile" style={{display:'flex',alignItems:'center',gap:7,padding:'6px 11px',background:'rgba(255,255,255,.85)',border:'1px solid rgba(200,192,178,.45)',borderRadius:8,cursor:'pointer',fontFamily:'DM Sans,sans-serif',fontSize:11,color:'#1a1714',fontWeight:600,transition:'all .2s',whiteSpace:'nowrap'}}>
-      <span style={{fontSize:14,display:'flex',flexDirection:'column',gap:2,opacity:.6}}>
-        <span style={{display:'block',width:14,height:1.5,background:'currentColor',borderRadius:2}}/>
-        <span style={{display:'block',width:10,height:1.5,background:'currentColor',borderRadius:2}}/>
-        <span style={{display:'block',width:12,height:1.5,background:'currentColor',borderRadius:2}}/>
-      </span>
-      <span style={{fontSize:11}}>{cur?.name||'Profile'}</span>
-      <span style={{fontSize:9,opacity:.5}}>{open?'▲':'▼'}</span>
-    </button>
-    {open&&<div style={{position:'absolute',top:'calc(100% + 8px)',right:0,background:'#fff',border:'1px solid rgba(200,192,178,.35)',borderRadius:14,boxShadow:'0 16px 48px rgba(80,60,40,.18)',zIndex:9999,minWidth:220,overflow:'hidden',animation:'scaleIn .18s ease both'}}>
-      <div style={{padding:'7px 12px',borderBottom:'1px solid rgba(200,192,178,.2)',fontSize:9,color:'rgba(90,82,72,.45)',textTransform:'uppercase',letterSpacing:'1px',fontFamily:'Syne,sans-serif',fontWeight:700,display:'flex',alignItems:'center',gap:6}}>
-        <span>Switch Profile</span>
-        <span style={{marginLeft:'auto',fontSize:9,color:'rgba(90,82,72,.3)',fontWeight:400,fontStyle:'italic'}}>drag to reorder</span>
-      </div>
-      {sorted.map((p,i)=>{
-        const isSelected=p.id===selected
-        const isDragging=dragIdx===i
-        const isOver=dragOver===i&&dragIdx!==i
-        const accent='#c2692a'
-        return<div key={p.id}
-          draggable
-          onDragStart={e=>onDragStart(e,i)}
-          onDragEnter={()=>onDragEnter(i)}
-          onDragOver={e=>e.preventDefault()}
-          onDrop={e=>onDrop(e,i)}
-          onDragEnd={onDragEnd}
-          onClick={()=>{onSelect(p.id);setOpen(false)}}
-          style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',cursor:'grab',
-            background:isDragging?'rgba(194,105,42,.06)':isSelected?`${accent}14`:isOver?'rgba(194,105,42,.08)':'transparent',
-            borderLeft:`3px solid ${isSelected?accent:isOver?'rgba(194,105,42,.4)':'transparent'}`,
-            transition:'background .1s',opacity:isDragging?.5:1,
-            borderTop:isOver?'2px solid rgba(194,105,42,.5)':'2px solid transparent'}}>
-          <span style={{display:'flex',flexDirection:'column',gap:2,opacity:.3,cursor:'grab',flexShrink:0}}>
-            {[0,1,2].map(r=><span key={r} style={{display:'block',width:12,height:1.5,background:'#1a1714',borderRadius:1}}/>)}
-          </span>
-          <Avatar name={p.name} size={28}/>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:12,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{p.name}</div>
-            <div style={{fontSize:10,color:'rgba(90,82,72,.5)',marginTop:1}}>{p.role}</div>
-          </div>
-          {isSelected&&<span style={{color:accent,fontSize:13,fontWeight:800,marginLeft:'auto'}}>✓</span>}
         </div>
       })}
     </div>}
@@ -368,7 +392,7 @@ function ProfileDropdown({profiles,selected,onSelect}){
       <div style={{maxHeight:260,overflowY:'auto'}}>
         {profiles.map(p=><div key={p.id} onClick={()=>{onSelect(p.id);setOpen(false)}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',cursor:'pointer',background:p.id===selected?'rgba(194,105,42,.06)':'transparent',transition:'background .15s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(194,105,42,.06)'} onMouseOut={e=>e.currentTarget.style.background=p.id===selected?'rgba(194,105,42,.06)':'transparent'}>
           <Avatar name={p.name} size={30}/>
-          <div><div style={{fontSize:13,fontWeight:600,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{p.name}</div><div style={{fontSize:11,color:'rgba(90,82,72,.55)'}}>{p.role}</div></div>
+          <div><div style={{fontSize:13,fontWeight:600,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{p.name}</div></div>
           {p.id===selected&&<span style={{marginLeft:'auto',color:'#c2692a',fontSize:14}}>✓</span>}
         </div>)}
       </div>
@@ -395,26 +419,22 @@ function Toast({msg,type='success',onClose}){
 function NoticeBanner({notices,onClickNotice}){
   const active=notices.filter(n=>n.active!==false)
   if(!active.length)return null
-  // Build a long repeated string for seamless loop
-  const tickerItems=active.map(n=>`📢  ${n.title}  —  ${n.message.slice(0,90)}${n.message.length>90?'…':''}`)
-  const fullText=[...tickerItems,...tickerItems,...tickerItems].join('     ✦     ')
-  return<div style={{background:'linear-gradient(90deg,rgba(194,105,42,.13) 0%,rgba(30,160,120,.09) 50%,rgba(194,105,42,.08) 100%)',borderBottom:'1px solid rgba(194,105,42,.2)',height:38,display:'flex',alignItems:'center',overflow:'hidden',position:'relative',cursor:'pointer'}} onClick={()=>onClickNotice(active[0])}>
-    {/* Left fade + label */}
-    <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:0,zIndex:2,position:'relative'}}>
-      <div style={{width:14,background:'rgba(194,105,42,.13)'}}/>
+  const items=[...active,...active,...active].map(n=>`📢  ${n.title}  —  ${n.message.slice(0,90)}${n.message.length>90?'…':''}`)
+  const fullText=items.join('     ✦     ')
+  return<div style={{background:'linear-gradient(90deg,rgba(194,105,42,.13),rgba(30,160,120,.09) 50%,rgba(194,105,42,.08))',borderBottom:'1px solid rgba(194,105,42,.2)',height:38,display:'flex',alignItems:'center',overflow:'hidden',cursor:'pointer'}} onClick={()=>onClickNotice(active[0])}>
+    <div style={{flexShrink:0,display:'flex',alignItems:'center',zIndex:2}}>
+      <div style={{width:12}}/>
       <span style={{fontSize:9,fontWeight:800,color:'#c2692a',fontFamily:'Syne,sans-serif',textTransform:'uppercase',letterSpacing:'1.2px',background:'rgba(194,105,42,.15)',border:'1px solid rgba(194,105,42,.3)',borderRadius:10,padding:'3px 10px',whiteSpace:'nowrap',flexShrink:0}}>LIVE</span>
       <div style={{width:1,height:22,background:'rgba(194,105,42,.2)',margin:'0 10px'}}/>
     </div>
-    {/* Scrolling text */}
-    <div style={{flex:1,overflow:'hidden',position:'relative'}}>
+    <div style={{flex:1,overflow:'hidden'}}>
       <div style={{display:'inline-block',whiteSpace:'nowrap',animation:'tickerScroll 42s linear infinite',fontSize:11.5,color:'#1a1714',fontWeight:500,letterSpacing:'.1px',lineHeight:'38px'}}>
         {fullText}
       </div>
     </div>
-    {/* Right fade + cta */}
-    <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:0,zIndex:2}}>
-      <div style={{width:60,background:'linear-gradient(to right,transparent,rgba(245,243,238,.95))',pointerEvents:'none'}}/>
-      <div style={{background:'rgba(194,105,42,.12)',borderLeft:'1px solid rgba(194,105,42,.2)',padding:'0 14px',height:38,display:'flex',alignItems:'center',gap:5}}>
+    <div style={{flexShrink:0,display:'flex',alignItems:'center',zIndex:2}}>
+      <div style={{width:60,background:'linear-gradient(to right,transparent,rgba(245,243,238,.95))',pointerEvents:'none',height:38}}/>
+      <div style={{background:'rgba(194,105,42,.12)',borderLeft:'1px solid rgba(194,105,42,.2)',padding:'0 14px',height:38,display:'flex',alignItems:'center'}}>
         <span style={{fontSize:10,color:'#c2692a',fontFamily:'Syne,sans-serif',fontWeight:700,whiteSpace:'nowrap'}}>Read →</span>
       </div>
     </div>
@@ -568,7 +588,7 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
         <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
           <div>
             <h2 style={{fontFamily:'Syne,sans-serif',fontSize:'1.45rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.4px',marginBottom:4}}>Reserve a Slot</h2>
-            {profile&&<div style={{display:'flex',alignItems:'center',gap:7,marginTop:4}}><Avatar name={profile.name} size={20}/><span style={{fontSize:12,color:'rgba(90,82,72,.6)',fontWeight:500}}>For <strong style={{color:'#1a1714'}}>{profile.name}</strong> · {profile.role}</span></div>}
+            {profile&&<div style={{display:'flex',alignItems:'center',gap:7,marginTop:4}}><Avatar name={profile.name} size={20}/><span style={{fontSize:12,color:'rgba(90,82,72,.6)',fontWeight:500}}>For <strong style={{color:'#1a1714'}}>{profile.name}</strong></span></div>}
           </div>
           <button className="btn-soft" onClick={onClose} style={{width:32,height:32,borderRadius:8,fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',padding:0}}>✕</button>
         </div>
@@ -606,7 +626,7 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
         </div>
         <div>
           <label className="lbl">Title</label>
-          <input className="f-in" placeholder="e.g. Interview with Priya…" value={title} onChange={e=>setTitle(e.target.value)}/>
+          <input className="f-in" placeholder="Company (specify rounds 1, 2, Client, etc.)" value={title} onChange={e=>setTitle(e.target.value)}/>
         </div>
         <div>
           <label className="lbl">Description <span style={{fontStyle:'italic',textTransform:'none',letterSpacing:0,color:'rgba(90,82,72,.3)',fontWeight:400}}>(optional)</span></label>
@@ -749,6 +769,9 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
   const[search,setSearch]=useState('');const[dateF,setDateF]=useState('');const[typeF,setTypeF]=useState('');const[profF,setProfF]=useState('');const[statusF,setStatusF]=useState('')
   const[newName,setNewName]=useState('');const[newRole,setNewRole]=useState('')
   const[noticeTitle,setNoticeTitle]=useState('');const[noticeMsg,setNoticeMsg]=useState('');const[noticeSaving,setNoticeSaving]=useState(false)
+  const[adminTheme,setAdminTheme]=useState(()=>localStorage.getItem('slotbook-admin-theme')||'default')
+  const[descModal,setDescModal]=useState(null)
+  const at=ADMIN_THEMES[adminTheme]
   const today=fmtDate(new Date());const mp=today.slice(0,7)
   const filtered=bookings.filter(b=>{
     const ms=!search||(b.title+' '+(b.desc||'')+' '+b.bookedBy).toLowerCase().includes(search.toLowerCase())
@@ -764,19 +787,33 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
     setNoticeTitle('');setNoticeMsg('');setNoticeSaving(false)
   }
 
-  return<div style={{background:'#f5f4f0',minHeight:'100%',display:'flex',flexDirection:'column',position:'relative',zIndex:1}}>
-    <div style={{height:58,background:'rgba(245,244,240,.95)',borderBottom:'1px solid rgba(200,192,178,.32)',padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
+  return<div style={{background:at?at.bg:'#f5f4f0',minHeight:'100%',display:'flex',flexDirection:'column',position:'relative',zIndex:1,color:at?at.text:'#1a1714',transition:'background .3s'}}>
+    {descModal&&<DescModal booking={descModal} profiles={profiles} onClose={()=>setDescModal(null)}/>}
+    <div style={{height:58,background:at?at.header:'rgba(245,244,240,.95)',borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.32)'}`,padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
         <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#c2692a',border:'1px solid rgba(194,105,42,.2)'}}>◈</div>
-        <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.3rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.3px'}}>SlotBook</span>
+        <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.3rem',fontWeight:800,color:at?at.text:'#1a1714',letterSpacing:'-.3px'}}>SlotBook</span>
         <span className="tag" style={{background:'rgba(194,105,42,.1)',color:'#c2692a',border:'1px solid rgba(194,105,42,.22)'}}>Admin</span>
         {pending>0&&<span style={{background:'rgba(200,60,60,.12)',color:'#c03838',border:'1px solid rgba(200,60,60,.3)',borderRadius:20,padding:'2px 10px',fontSize:11,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{pending} pending</span>}
       </div>
-      <button className="btn-soft" onClick={onClose} style={{padding:'7px 16px',borderRadius:8,fontSize:12}}>← Exit Admin</button>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        {/* Admin Theme buttons blended with Exit */}
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          {Object.entries(ADMIN_THEMES).map(([key,t])=>{
+            const isActive=adminTheme===key
+            return<button key={key} onClick={()=>{setAdminTheme(key);localStorage.setItem('slotbook-admin-theme',key)}}
+              title={t.name}
+              style={{padding:'7px 14px',borderRadius:8,fontSize:11,fontWeight:700,fontFamily:'Syne,sans-serif',cursor:'pointer',border:`1px solid ${isActive?t.accent:'rgba(200,192,178,.45)'}`,background:isActive?t.btn:'rgba(255,255,255,.85)',color:isActive?'#fff':t.accent,transition:'all .22s',boxShadow:isActive?`0 2px 12px ${t.accent}40`:'none',transform:isActive?'translateY(-1px)':'none'}}>
+              {t.name}
+            </button>
+          })}
+          <button className="btn-soft" onClick={onClose} style={{padding:'7px 16px',borderRadius:8,fontSize:12,marginLeft:4}}>← Exit Admin</button>
+        </div>
+      </div>
     </div>
-    <div style={{display:'flex',gap:0,borderBottom:'1px solid rgba(200,192,178,.3)',background:'rgba(255,255,255,.6)',flexShrink:0}}>
+    <div style={{display:'flex',gap:0,borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.3)'}`,background:at?`rgba(255,255,255,.06)`:'rgba(255,255,255,.6)',flexShrink:0}}>
       {[['bookings','📅 Bookings'],['profiles','👤 Profiles'],['notices','📢 Notices']].map(([k,lbl])=><button key={k} onClick={()=>setTab(k)}
-        style={{padding:'12px 24px',background:'transparent',border:'none',borderBottom:`2px solid ${tab===k?'#c2692a':'transparent'}`,color:tab===k?'#c2692a':'rgba(90,82,72,.6)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:13,cursor:'pointer',transition:'all .2s'}}>
+        style={{padding:'12px 24px',background:'transparent',border:'none',borderBottom:`2px solid ${tab===k?'#c2692a':'transparent'}`,color:tab===k?'#c2692a':at?`${at.muted}`:'rgba(90,82,72,.6)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:13,cursor:'pointer',transition:'all .2s'}}>
         {lbl}{k==='notices'&&notices.length>0&&<span style={{marginLeft:5,background:'rgba(194,105,42,.15)',color:'#c2692a',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:800}}>{notices.filter(n=>n.active!==false).length}</span>}
       </button>)}
     </div>
@@ -792,6 +829,16 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:'1.25rem'}}>
           <input className="f-in" placeholder="Search…" style={{flex:1,minWidth:150}} value={search} onChange={e=>setSearch(e.target.value)}/>
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            {[['Today',today],['Tomorrow',fmtDate(addDays(new Date(),1))]].map(([lbl,d])=>{
+              const isActive=dateF===d
+              return<button key={lbl} onClick={()=>setDateF(isActive?'':d)}
+                style={{padding:'10px 16px',borderRadius:10,border:`1.5px solid ${isActive?'#c2692a':'rgba(200,192,178,.46)'}`,background:isActive?'rgba(194,105,42,.1)':'rgba(255,255,255,.9)',color:isActive?'#c2692a':'rgba(90,82,72,.7)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',transition:'all .18s',boxShadow:isActive?'0 0 0 3px rgba(194,105,42,.12)':'none'}}>
+                {lbl==='Today'?'📅':'🌅'} {lbl}
+                {isActive&&<span style={{marginLeft:6,fontSize:10,opacity:.6}}>✕</span>}
+              </button>
+            })}
+          </div>
           <input type="date" className="f-in" style={{width:150}} value={dateF} onChange={e=>setDateF(e.target.value)}/>
           <select className="f-in" style={{width:140}} value={profF} onChange={e=>setProfF(e.target.value)}>
             <option value="">All Profiles</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
@@ -806,7 +853,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
         <div className="card" style={{overflow:'hidden',padding:0}}>
           <div style={{overflowX:'auto'}}>
             <table className="adm-tbl">
-              <thead><tr><th>Status</th><th>Profile</th><th>Booked By</th><th>Phone</th><th>Title</th><th>Date</th><th>Start (IST)</th><th>End (IST)</th><th>Type</th><th>Description</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Status</th><th>Profile</th><th>Booked By</th><th>Phone</th><th>Title</th><th>Date</th><th>Day</th><th>Start (IST)</th><th>End (IST)</th><th>Type</th><th>Description</th><th>Actions</th></tr></thead>
               <tbody>
                 {filtered.length===0?<tr><td colSpan={11} style={{textAlign:'center',padding:'3rem',color:'rgba(90,82,72,.28)'}}><div style={{fontSize:28,marginBottom:8,opacity:.2}}>◇</div><p style={{fontSize:13}}>No bookings found.</p></td></tr>
                 :filtered.map((b,i)=>{
@@ -819,10 +866,16 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
                     <td style={{fontSize:12,color:'rgba(90,82,72,.6)'}}>{b.userPhone||'—'}</td>
                     <td style={{fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{b.title}</td>
                     <td style={{fontSize:12,color:'rgba(90,82,72,.7)'}}>{dDate(b.date)}</td>
+                    <td><span style={{fontSize:11,fontWeight:700,color:'rgba(90,82,72,.6)',background:'rgba(200,192,178,.15)',padding:'3px 9px',borderRadius:20,whiteSpace:'nowrap',fontFamily:'Syne,sans-serif'}}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parseDate(b.date).getDay()]}</span></td>
                     <td style={{fontWeight:700,color:m.color,fontFamily:'Syne,sans-serif',whiteSpace:'nowrap'}}>{dTime(b.startTime)}</td>
                     <td style={{fontWeight:700,color:m.color,fontFamily:'Syne,sans-serif',whiteSpace:'nowrap'}}>{dTime(b.endTime)}</td>
                     <td><span className="tag" style={{background:m.bg,color:m.color,border:`1px solid ${m.border}`}}>{b.type}</span></td>
-                    <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'rgba(90,82,72,.6)',fontSize:12}}>{b.desc||'—'}</td>
+                    <td style={{maxWidth:130,cursor:b.desc?'pointer':'default'}} onClick={()=>b.desc&&setDescModal(b)} title={b.desc?'Click to read full description':''}>
+                      {b.desc?<span style={{display:'flex',alignItems:'center',gap:5,fontSize:12,color:'#1878c8',fontWeight:500}}>
+                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}}>{b.desc.slice(0,30)}{b.desc.length>30?'…':''}</span>
+                        <span style={{fontSize:10,opacity:.7,flexShrink:0}}>↗</span>
+                      </span>:<span style={{color:'rgba(90,82,72,.35)',fontSize:12}}>—</span>}
+                    </td>
                     <td><div style={{display:'flex',gap:5,alignItems:'center'}}>
                       {isPending&&<>
                         <button onClick={()=>onApprove(b.id)} style={{background:'rgba(30,160,120,.1)',border:'1px solid rgba(30,160,120,.3)',color:'#1a9070',borderRadius:7,padding:'4px 10px',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Syne,sans-serif',whiteSpace:'nowrap'}} onMouseOver={e=>e.currentTarget.style.background='rgba(30,160,120,.2)'} onMouseOut={e=>e.currentTarget.style.background='rgba(30,160,120,.1)'}>✓ Approve</button>
@@ -1206,14 +1259,12 @@ export default function App(){
         </div>
         <div style={{display:'flex',alignItems:'center',gap:9}}>
           <ThemePicker theme={theme} setTheme={setTheme}/>
-          <DragProfileSwitcher profiles={profiles} selected={profileId} onSelect={pid=>setProfileId(pid)} onReorder={()=>{}}/>
-          {userName&&<div style={{display:'flex',background:'rgba(255,255,255,.72)',border:'1px solid rgba(200,192,178,.4)',borderRadius:20,padding:'4px 12px 4px 8px',fontSize:12,color:'rgba(90,82,72,.78)',alignItems:'center',gap:7}}>
-            <Avatar name={userName} size={22}/>{userName}
+          <DragProfileSwitcher profiles={profiles} selected={profileId} onSelect={pid=>setProfileId(pid)}/>
+          {userName&&<div style={{display:'flex',background:'rgba(255,255,255,.72)',border:'1px solid rgba(200,192,178,.4)',borderRadius:20,padding:'4px 10px 4px 6px',fontSize:12,color:'rgba(90,82,72,.78)',alignItems:'center',gap:6}}>
+            <Avatar name={userName} size={20}/>
           </div>}
           <div style={{display:'flex',alignItems:'center',border:'1px solid rgba(200,192,178,.45)',borderRadius:11,overflow:'hidden',background:'rgba(255,255,255,.75)'}}>
-            <ProfileDropdown profiles={profiles} selected={profileId} onSelect={pid=>setProfileId(pid)}/>
-            <div style={{width:1,background:'rgba(200,192,178,.5)',height:32}}/>
-            <button className="btn-dark" onClick={()=>handleBook(fmtDate(viewDate),null)} style={{padding:'9px 18px',borderRadius:0,fontSize:13,display:'flex',alignItems:'center',gap:7,height:'100%'}}>
+            <button className="btn-dark" onClick={()=>handleBook(fmtDate(viewDate),null)} style={{padding:'9px 18px',borderRadius:11,fontSize:13,display:'flex',alignItems:'center',gap:7,height:'100%'}}>
               + Book Slot <span style={{animation:'arrBounce 1.4s ease infinite',display:'inline-block'}}>→</span>
             </button>
           </div>
