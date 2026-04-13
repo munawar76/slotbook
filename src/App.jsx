@@ -533,16 +533,37 @@ function SearchBar({bookings,profiles,onResult,onClear}){
 }
 
 // ─── Name Modal ───────────────────────────────────────────────────
-function NameModal({onSave}){
+function NameModal({onSave,onClose}){
   const[name,setName]=useState('')
   const[phone,setPhone]=useState('')
   const ref=useRef()
   useEffect(()=>ref.current?.focus(),[])
   const ok=name.trim().length>0
-  return<div className="overlay open">
-    <div className="card" style={{padding:'2.5rem',width:'100%',maxWidth:420,animation:'scaleIn .28s ease both'}}>
+  return<div className="overlay open" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="card" style={{padding:'2.5rem',width:'100%',maxWidth:420,animation:'scaleIn .28s ease both',position:'relative'}}>
+      {/* Close button */}
+      <button onClick={onClose} style={{position:'absolute',top:16,right:16,width:32,height:32,borderRadius:8,background:'rgba(200,192,178,.15)',border:'1px solid rgba(200,192,178,.3)',color:'rgba(90,82,72,.5)',cursor:'pointer',fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}} onMouseOver={e=>{e.currentTarget.style.background='rgba(200,60,60,.1)';e.currentTarget.style.color='#c03838'}} onMouseOut={e=>{e.currentTarget.style.background='rgba(200,192,178,.15)';e.currentTarget.style.color='rgba(90,82,72,.5)'}}>✕</button>
       <div style={{textAlign:'center',marginBottom:'2rem'}}>
-        <div style={{width:54,height:54,borderRadius:16,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,margin:'0 auto 16px',color:'#c2692a',border:'1px solid rgba(194,105,42,.2)'}}>◈</div>
+        {/* SlotBook Logo */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:20}}>
+          <div style={{width:36,height:36,borderRadius:11,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.22)'}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/>
+              <circle cx="12" cy="3.2" r="0.8" fill="#c2692a" opacity="0.5"/>
+              <circle cx="12" cy="20.8" r="0.8" fill="#c2692a" opacity="0.5"/>
+              <circle cx="3.2" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/>
+              <circle cx="20.8" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/>
+              <circle cx="6.1" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/>
+              <circle cx="17.9" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/>
+              <circle cx="6.1" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/>
+              <circle cx="17.9" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/>
+              <line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/>
+              <line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/>
+              <circle cx="12" cy="12" r="1.6" fill="#c2692a"/>
+            </svg>
+          </div>
+          <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.2rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.4px'}}>SlotBook</span>
+        </div>
         <h2 style={{fontFamily:'Syne,sans-serif',fontSize:'1.7rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.5px',marginBottom:8}}>What's your name?</h2>
         <p style={{fontSize:13,color:'rgba(90,82,72,.55)',lineHeight:1.65}}>Your name will be recorded and visible to the admin.</p>
       </div>
@@ -791,7 +812,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
     {descModal&&<DescModal booking={descModal} profiles={profiles} onClose={()=>setDescModal(null)}/>}
     <div style={{height:58,background:at?at.header:'rgba(245,244,240,.95)',borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.32)'}`,padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
-        <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#c2692a',border:'1px solid rgba(194,105,42,.2)'}}>◈</div>
+        <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.2)'}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/><circle cx="12" cy="3.2" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="12" cy="20.8" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="3.2" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="20.8" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/><line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/><line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/><circle cx="12" cy="12" r="1.6" fill="#c2692a"/></svg></div>
         <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.3rem',fontWeight:800,color:at?at.text:'#1a1714',letterSpacing:'-.3px'}}>SlotBook</span>
         <span className="tag" style={{background:'rgba(194,105,42,.1)',color:'#c2692a',border:'1px solid rgba(194,105,42,.22)'}}>Admin</span>
         {pending>0&&<span style={{background:'rgba(200,60,60,.12)',color:'#c03838',border:'1px solid rgba(200,60,60,.3)',borderRadius:20,padding:'2px 10px',fontSize:11,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{pending} pending</span>}
@@ -1240,7 +1261,7 @@ export default function App(){
   return<>
     <div className="orb orb1"/><div className="orb orb2"/><div className="orb orb3"/>
     {toast&&<Toast {...toast} onClose={()=>setToast(null)}/>}
-    {showName&&<NameModal onSave={onNameSaved}/>}
+    {showName&&<NameModal onSave={onNameSaved} onClose={()=>{setShowName(false);pendingDay.current=null;pendingHour.current=null;pendingProf.current=null}}/>}
     {bookMod&&<BookModal prefillDate={bookMod.prefillDate} prefillHour={bookMod.prefillHour} profileId={bookMod.profileId||profileId} profiles={profiles} bookings={bookings} userName={userName} userPhone={userPhone} onBook={async b=>{await saveBooking(b);setBookMod(null)}} onClose={()=>setBookMod(null)} saving={saving} selectedTZ={selectedTZ}/>}
     {dayMod&&<DayModal dateStr={dayMod.ds} bookings={bookings} profileId={profileId} userName={userName} onBookHere={bookFromDay} onClose={()=>setDayMod(null)} onCancelRequest={b=>setCancelMod(b)}/>}
     {cancelMod&&<CancelModal booking={cancelMod} userName={userName} profiles={profiles} onCancel={cancelBooking} onClose={()=>setCancelMod(null)}/>}
@@ -1251,7 +1272,22 @@ export default function App(){
       {/* ── Header ── */}
       <header className="main-header">
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{width:32,height:32,borderRadius:10,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,color:'#c2692a',border:'1px solid rgba(194,105,42,.2)'}}>◈</div>
+          <div style={{width:32,height:32,borderRadius:10,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.2)'}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/>
+              <circle cx="12" cy="3.2" r="0.8" fill="#c2692a" opacity="0.5"/>
+              <circle cx="12" cy="20.8" r="0.8" fill="#c2692a" opacity="0.5"/>
+              <circle cx="3.2" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/>
+              <circle cx="20.8" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/>
+              <circle cx="6.1" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/>
+              <circle cx="17.9" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/>
+              <circle cx="6.1" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/>
+              <circle cx="17.9" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/>
+              <line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/>
+              <line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/>
+              <circle cx="12" cy="12" r="1.6" fill="#c2692a"/>
+            </svg>
+          </div>
           <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.35rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.4px'}}>SlotBook</span>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:9,flex:1,justifyContent:'center',maxWidth:320}}>
