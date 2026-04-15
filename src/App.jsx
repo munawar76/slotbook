@@ -797,7 +797,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
   const filtered=bookings.filter(b=>{
     const ms=!search||(b.title+' '+(b.desc||'')+' '+b.bookedBy).toLowerCase().includes(search.toLowerCase())
     return ms&&(!dateF||b.date===dateF)&&(!typeF||b.type===typeF)&&(!profF||b.profileId===profF)&&(!statusF||b.status===statusF)
-  }).sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0))
+  }).sort((a,b)=>dateF?a.startTime.localeCompare(b.startTime):new Date(b.createdAt||0)-new Date(a.createdAt||0))
   const pending=bookings.filter(b=>b.status==='pending').length
   const approved=bookings.filter(b=>b.status==='approved').length
 
