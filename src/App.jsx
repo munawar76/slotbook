@@ -146,7 +146,6 @@ const DEFAULT_PROFILES=[
 ]
 const HOURS=Array.from({length:24},(_,i)=>i)
 
-// World timezones — free via Intl API, no external service needed
 const TIMEZONES=[
   {label:'India (IST)',       tz:'Asia/Kolkata'},
   {label:'UAE (GST)',         tz:'Asia/Dubai'},
@@ -179,17 +178,6 @@ function avatarColor(name){
 }
 function addDays(date,n){const d=new Date(date);d.setDate(d.getDate()+n);return d}
 function startOfWeek(date){const d=new Date(date);d.setDate(d.getDate()-d.getDay());return d}
-function tzTime(t24,date,tz){
-  if(!t24||!date)return''
-  try{
-    const[h,m]=t24.split(':').map(Number)
-    const dt=new Date(parseDate(date))
-    dt.setHours(h,m,0,0)
-    return new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:tz}).format(dt)
-  }catch{return''}
-}
-
-// Timezone conversion helpers
 function getTZOffsetMins(tz){
   const d=new Date()
   const utc=new Date(d.toLocaleString('en-US',{timeZone:'UTC'}))
@@ -205,6 +193,23 @@ function convertTimeTZ(time24,fromTZ,toTZ){
     const totalMins=((h*60+m-fromOff+toOff)%1440+1440)%1440
     return`${padZ(Math.floor(totalMins/60))}:${padZ(totalMins%60)}`
   }catch{return''}
+}
+
+// ─── Avatar ───────────────────────────────────────────────────────
+function Avatar({name,size=28,style={}}){
+  const[bg,fg]=avatarColor(name)
+  return<div style={{width:size,height:size,borderRadius:'50%',background:bg,border:`1.5px solid ${fg}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*0.34,fontWeight:800,color:fg,fontFamily:'Syne,sans-serif',flexShrink:0,...style}}>{initials(name)}</div>
+}
+
+// ─── Status Badge ─────────────────────────────────────────────────
+function StatusBadge({status,small=false}){
+  const cfg={
+    pending: {bg:'rgba(230,168,0,.12)',color:'#a07000',border:'rgba(230,168,0,.4)',label:'⏳ Pending'},
+    approved:{bg:'rgba(30,160,120,.1)', color:'#1a9070',border:'rgba(30,160,120,.3)',label:'✓ Approved'},
+    rejected:{bg:'#d63030',             color:'#fff',   border:'#b82828',           label:'✕ Declined',glow:true},
+  }
+  const s=cfg[status]||cfg.pending
+  return<span style={{fontSize:small?9:10,padding:small?'2px 7px':'4px 10px',borderRadius:20,background:s.bg,color:s.color,border:`1px solid ${s.border}`,fontFamily:'Syne,sans-serif',fontWeight:700,textTransform:'uppercase',letterSpacing:'.6px',whiteSpace:'nowrap',boxShadow:s.glow?'0 2px 8px rgba(214,48,48,.35)':'none'}}>{s.label}</span>
 }
 
 // ─── Drag Profile Switcher ────────────────────────────────────────
@@ -306,7 +311,6 @@ function ThemePicker({theme,setTheme}){
   return<div ref={ref} style={{position:'relative'}}>
     <button onClick={()=>setOpen(o=>!o)} title="Change Theme" style={{display:'flex',alignItems:'center',gap:6,padding:'6px 11px',background:'rgba(255,255,255,.85)',border:'1px solid rgba(200,192,178,.45)',borderRadius:8,cursor:'pointer',fontFamily:'DM Sans,sans-serif',fontSize:11,color:'#1a1714',fontWeight:600,transition:'all .2s',whiteSpace:'nowrap'}}>
       <span style={{fontSize:14}}>{cur.icon}</span>
-      <span style={{display:'none',fontSize:11}}>{cur.name}</span>
       <span style={{fontSize:9,opacity:.5,marginLeft:1}}>{open?'▲':'▼'}</span>
     </button>
     {open&&<div style={{position:'absolute',top:'calc(100% + 8px)',right:0,background:'#fff',border:'1px solid rgba(200,192,178,.35)',borderRadius:14,boxShadow:'0 16px 48px rgba(80,60,40,.18)',zIndex:9999,minWidth:190,overflow:'hidden',animation:'scaleIn .18s ease both'}}>
@@ -318,84 +322,12 @@ function ThemePicker({theme,setTheme}){
           <div>
             <div style={{fontSize:12,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{t.name}</div>
             <div style={{display:'flex',gap:4,marginTop:4}}>
-              {[t['--t-accent'],t['--t-accent2'],t['--t-bg'].replace('rgba(','').replace(')','')].map((c,i)=><div key={i} style={{width:12,height:12,borderRadius:3,background:c,border:'1px solid rgba(0,0,0,.08)'}}/>)}
+              {[t['--t-accent'],t['--t-accent2']].map((c,i)=><div key={i} style={{width:12,height:12,borderRadius:3,background:c,border:'1px solid rgba(0,0,0,.08)'}}/>)}
             </div>
           </div>
           {key===theme&&<span style={{marginLeft:'auto',color:accent,fontSize:13,fontWeight:800}}>✓</span>}
         </div>
       })}
-    </div>}
-  </div>
-}
-
-// ─── Avatar ───────────────────────────────────────────────────────
-function Avatar({name,size=28,style={}}){
-  const[bg,fg]=avatarColor(name)
-  return<div style={{width:size,height:size,borderRadius:'50%',background:bg,border:`1.5px solid ${fg}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*0.34,fontWeight:800,color:fg,fontFamily:'Syne,sans-serif',flexShrink:0,...style}}>{initials(name)}</div>
-}
-
-// ─── Status Badge ─────────────────────────────────────────────────
-function StatusBadge({status,small=false}){
-  const cfg={
-    pending: {bg:'rgba(230,168,0,.12)',color:'#a07000',border:'rgba(230,168,0,.4)',label:'⏳ Pending'},
-    approved:{bg:'rgba(30,160,120,.1)', color:'#1a9070',border:'rgba(30,160,120,.3)',label:'✓ Approved'},
-    rejected:{bg:'#d63030',             color:'#fff',   border:'#b82828',           label:'✕ Declined',glow:true},
-  }
-  const s=cfg[status]||cfg.pending
-  return<span style={{fontSize:small?9:10,padding:small?'2px 7px':'4px 10px',borderRadius:20,background:s.bg,color:s.color,border:`1px solid ${s.border}`,fontFamily:'Syne,sans-serif',fontWeight:700,textTransform:'uppercase',letterSpacing:'.6px',whiteSpace:'nowrap',boxShadow:s.glow?'0 2px 8px rgba(214,48,48,.35)':'none'}}>{s.label}</span>
-}
-
-// ─── Time Field ───────────────────────────────────────────────────
-function TimeField({label,value,onChange}){
-  const{h,m,ap}=to12(value||'09:00')
-  const[hour,setHour]=useState(h)
-  const[min,setMin]=useState(m)
-  const[ampm,setAmpm]=useState(ap)
-  useEffect(()=>{
-    const hh=hour.replace(/\D/g,'').slice(0,2)||'12'
-    const mm=min.replace(/\D/g,'').slice(0,2)||'00'
-    onChange(to24(hh,mm,ampm))
-  },[hour,min,ampm])
-  const cH=v=>String(Math.max(1,Math.min(12,parseInt(v)||12)))
-  const cM=v=>padZ(Math.max(0,Math.min(59,parseInt(v)||0)))
-  return<div>
-    <label className="lbl">{label}</label>
-    <div style={{display:'flex',alignItems:'center',gap:6}}>
-      <input className="t-box" value={hour} maxLength={2} placeholder="9" onChange={e=>setHour(e.target.value)} onBlur={e=>setHour(cH(e.target.value))}/>
-      <span style={{color:'rgba(90,82,72,.3)',fontSize:20,fontWeight:200}}>:</span>
-      <input className="t-box" value={min} maxLength={2} placeholder="00" onChange={e=>setMin(e.target.value)} onBlur={e=>setMin(cM(e.target.value))}/>
-      <div className="ampm-wrap" style={{marginLeft:2}}>
-        <button className={`ampm-btn${ampm==='AM'?' on':''}`} onClick={()=>setAmpm('AM')}>AM</button>
-        <button className={`ampm-btn${ampm==='PM'?' on':''}`} onClick={()=>setAmpm('PM')}>PM</button>
-      </div>
-    </div>
-  </div>
-}
-
-// ─── Profile Dropdown ─────────────────────────────────────────────
-function ProfileDropdown({profiles,selected,onSelect}){
-  const[open,setOpen]=useState(false)
-  const ref=useRef()
-  useEffect(()=>{
-    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)}
-    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h)
-  },[])
-  const cur=profiles.find(p=>p.id===selected)||profiles[0]
-  return<div ref={ref} style={{position:'relative'}}>
-    <button onClick={()=>setOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 12px 7px 8px',background:'rgba(255,255,255,.85)',border:'none',cursor:'pointer',fontFamily:'DM Sans,sans-serif',fontSize:13,color:'#1a1714',fontWeight:500}}>
-      {cur&&<Avatar name={cur.name} size={24}/>}
-      <span>{cur?.name||'Select'}</span>
-      <span style={{fontSize:10,color:'rgba(90,82,72,.5)',marginLeft:2}}>{open?'▲':'▼'}</span>
-    </button>
-    {open&&<div style={{position:'absolute',top:'calc(100% + 8px)',left:'50%',transform:'translateX(-50%)',minWidth:240,background:'#fff',border:'1px solid rgba(200,192,178,.35)',borderRadius:14,boxShadow:'0 16px 48px rgba(80,60,40,.18)',zIndex:9999,overflow:'hidden',animation:'scaleIn .18s ease both'}}>
-      <div style={{padding:'6px 10px',borderBottom:'1px solid rgba(200,192,178,.2)',fontSize:10,color:'rgba(90,82,72,.45)',textTransform:'uppercase',letterSpacing:'1px',fontFamily:'Syne,sans-serif',fontWeight:700}}>Select Profile</div>
-      <div style={{maxHeight:260,overflowY:'auto'}}>
-        {profiles.map(p=><div key={p.id} onClick={()=>{onSelect(p.id);setOpen(false)}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',cursor:'pointer',background:p.id===selected?'rgba(194,105,42,.06)':'transparent',transition:'background .15s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(194,105,42,.06)'} onMouseOut={e=>e.currentTarget.style.background=p.id===selected?'rgba(194,105,42,.06)':'transparent'}>
-          <Avatar name={p.name} size={30}/>
-          <div><div style={{fontSize:13,fontWeight:600,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{p.name}</div></div>
-          {p.id===selected&&<span style={{marginLeft:'auto',color:'#c2692a',fontSize:14}}>✓</span>}
-        </div>)}
-      </div>
     </div>}
   </div>
 }
@@ -428,9 +360,7 @@ function NoticeBanner({notices,onClickNotice}){
       <div style={{width:1,height:22,background:'rgba(194,105,42,.2)',margin:'0 10px'}}/>
     </div>
     <div style={{flex:1,overflow:'hidden'}}>
-      <div style={{display:'inline-block',whiteSpace:'nowrap',animation:'tickerScroll 42s linear infinite',fontSize:11.5,color:'#1a1714',fontWeight:500,letterSpacing:'.1px',lineHeight:'38px'}}>
-        {fullText}
-      </div>
+      <div style={{display:'inline-block',whiteSpace:'nowrap',animation:'tickerScroll 42s linear infinite',fontSize:11.5,color:'#1a1714',fontWeight:500,letterSpacing:'.1px',lineHeight:'38px'}}>{fullText}</div>
     </div>
     <div style={{flexShrink:0,display:'flex',alignItems:'center',zIndex:2}}>
       <div style={{width:60,background:'linear-gradient(to right,transparent,rgba(245,243,238,.95))',pointerEvents:'none',height:38}}/>
@@ -467,33 +397,30 @@ function NoticeModal({notice,onClose}){
   </div>
 }
 
-// ─── Timezone Clock Bar ───────────────────────────────────────────
-function TZBar(){
-  const[now,setNow]=useState(new Date())
-  const[expanded,setExpanded]=useState(false)
-  useEffect(()=>{const t=setInterval(()=>setNow(new Date()),60000);return()=>clearInterval(t)},[])
-  const fmt=(tz)=>new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:tz,timeZoneName:'short'}).format(now)
-  const IST=fmt('Asia/Kolkata')
-  const main=TIMEZONES[0]
-  return<div style={{position:'relative'}}>
-    <button onClick={()=>setExpanded(o=>!o)} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',background:'rgba(255,255,255,.72)',border:'1px solid rgba(200,192,178,.4)',borderRadius:8,cursor:'pointer',fontFamily:'DM Sans,sans-serif',fontSize:11,color:'rgba(90,82,72,.8)',transition:'all .2s'}} title="World times">
-      <span style={{fontSize:13}}>🕐</span>
-      <span style={{fontWeight:600,color:'#1a1714'}}>{IST}</span>
-      <span style={{fontSize:10,opacity:.6}}>{expanded?'▲':'▼'}</span>
-    </button>
-    {expanded&&<div style={{position:'absolute',top:'calc(100% + 6px)',right:0,width:280,background:'#fff',border:'1px solid rgba(200,192,178,.35)',borderRadius:14,boxShadow:'0 16px 48px rgba(80,60,40,.18)',zIndex:9999,overflow:'hidden',animation:'scaleIn .18s ease both'}}>
-      <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(200,192,178,.2)',fontSize:10,color:'rgba(90,82,72,.45)',textTransform:'uppercase',letterSpacing:'1px',fontFamily:'Syne,sans-serif',fontWeight:700}}>World Times</div>
-      <div style={{maxHeight:300,overflowY:'auto'}}>
-        {TIMEZONES.map(z=>{
-          const isIST=z.tz==='Asia/Kolkata'
-          const t=fmt(z.tz)
-          return<div key={z.tz} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',borderBottom:'1px solid rgba(200,192,178,.08)',background:isIST?'rgba(194,105,42,.04)':'transparent'}}>
-            <span style={{fontSize:12,color:'rgba(90,82,72,.7)',fontWeight:isIST?700:400}}>{z.label}</span>
-            <span style={{fontSize:12,fontWeight:700,color:isIST?'#c2692a':'#1a1714',fontFamily:'Syne,sans-serif'}}>{t}</span>
-          </div>
-        })}
+// ─── Time Field ───────────────────────────────────────────────────
+function TimeField({label,value,onChange}){
+  const{h,m,ap}=to12(value||'09:00')
+  const[hour,setHour]=useState(h)
+  const[min,setMin]=useState(m)
+  const[ampm,setAmpm]=useState(ap)
+  useEffect(()=>{
+    const hh=hour.replace(/\D/g,'').slice(0,2)||'12'
+    const mm=min.replace(/\D/g,'').slice(0,2)||'00'
+    onChange(to24(hh,mm,ampm))
+  },[hour,min,ampm])
+  const cH=v=>String(Math.max(1,Math.min(12,parseInt(v)||12)))
+  const cM=v=>padZ(Math.max(0,Math.min(59,parseInt(v)||0)))
+  return<div>
+    <label className="lbl">{label}</label>
+    <div style={{display:'flex',alignItems:'center',gap:6}}>
+      <input className="t-box" value={hour} maxLength={2} placeholder="9" onChange={e=>setHour(e.target.value)} onBlur={e=>setHour(cH(e.target.value))}/>
+      <span style={{color:'rgba(90,82,72,.3)',fontSize:20,fontWeight:200}}>:</span>
+      <input className="t-box" value={min} maxLength={2} placeholder="00" onChange={e=>setMin(e.target.value)} onBlur={e=>setMin(cM(e.target.value))}/>
+      <div className="ampm-wrap" style={{marginLeft:2}}>
+        <button className={`ampm-btn${ampm==='AM'?' on':''}`} onClick={()=>setAmpm('AM')}>AM</button>
+        <button className={`ampm-btn${ampm==='PM'?' on':''}`} onClick={()=>setAmpm('PM')}>PM</button>
       </div>
-    </div>}
+    </div>
   </div>
 }
 
@@ -518,7 +445,6 @@ function SearchBar({bookings,profiles,onResult,onClear}){
     {open&&results.length>0&&<div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:'#fff',border:'1px solid rgba(200,192,178,.35)',borderRadius:10,boxShadow:'0 8px 32px rgba(80,60,40,.12)',zIndex:9999,maxHeight:220,overflowY:'auto'}}>
       {results.slice(0,8).map(b=>{
         const prof=profiles.find(p=>p.id===b.profileId)
-        const m=TC[b.type]||TC.other
         return<div key={b.id} onClick={()=>pick(b)} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',cursor:'pointer',borderBottom:'1px solid rgba(200,192,178,.1)',transition:'background .12s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(194,105,42,.04)'} onMouseOut={e=>e.currentTarget.style.background='transparent'}>
           <Avatar name={b.bookedBy} size={26}/>
           <div style={{flex:1,minWidth:0}}>
@@ -541,26 +467,11 @@ function NameModal({onSave,onClose}){
   const ok=name.trim().length>0
   return<div className="overlay open" onClick={e=>e.target===e.currentTarget&&onClose()}>
     <div className="card" style={{padding:'2.5rem',width:'100%',maxWidth:420,animation:'scaleIn .28s ease both',position:'relative'}}>
-      {/* Close button */}
       <button onClick={onClose} style={{position:'absolute',top:16,right:16,width:32,height:32,borderRadius:8,background:'rgba(200,192,178,.15)',border:'1px solid rgba(200,192,178,.3)',color:'rgba(90,82,72,.5)',cursor:'pointer',fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}} onMouseOver={e=>{e.currentTarget.style.background='rgba(200,60,60,.1)';e.currentTarget.style.color='#c03838'}} onMouseOut={e=>{e.currentTarget.style.background='rgba(200,192,178,.15)';e.currentTarget.style.color='rgba(90,82,72,.5)'}}>✕</button>
       <div style={{textAlign:'center',marginBottom:'2rem'}}>
-        {/* SlotBook Logo */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:20}}>
           <div style={{width:36,height:36,borderRadius:11,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.22)'}}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/>
-              <circle cx="12" cy="3.2" r="0.8" fill="#c2692a" opacity="0.5"/>
-              <circle cx="12" cy="20.8" r="0.8" fill="#c2692a" opacity="0.5"/>
-              <circle cx="3.2" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/>
-              <circle cx="20.8" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/>
-              <circle cx="6.1" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/>
-              <circle cx="17.9" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/>
-              <circle cx="6.1" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/>
-              <circle cx="17.9" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/>
-              <line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/>
-              <line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/>
-              <circle cx="12" cy="12" r="1.6" fill="#c2692a"/>
-            </svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/><line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/><line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/><circle cx="12" cy="12" r="1.6" fill="#c2692a"/></svg>
           </div>
           <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.2rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.4px'}}>SlotBook</span>
         </div>
@@ -592,7 +503,6 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
   const profB=bookings.filter(b=>b.profileId===profileId&&(b.status||'pending')!=='rejected')
   const isIST=selectedTZ==='Asia/Kolkata'
   const tzInfo=TIMEZONES.find(z=>z.tz===selectedTZ)||TIMEZONES[0]
-  // Convert user's local time → IST for storage & clash detection
   const istStart=isIST?start:convertTimeTZ(start,selectedTZ,'Asia/Kolkata')
   const istEnd=isIST?end:convertTimeTZ(end,selectedTZ,'Asia/Kolkata')
   const endErr=end&&start&&tmins(end)<=tmins(start)
@@ -622,12 +532,10 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
           <label className="lbl">Date</label>
           <input type="date" className="f-in" value={date} onChange={e=>setDate(e.target.value)}/>
         </div>
-        {/* Time label shows user's timezone */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
           <TimeField label={isIST?'Start Time':`Start (${tzInfo.label.split(' ')[1]||'Your TZ'})`} value={start} onChange={setStart}/>
           <TimeField label={isIST?'End Time':`End (${tzInfo.label.split(' ')[1]||'Your TZ'})`} value={end} onChange={setEnd}/>
         </div>
-        {/* Timezone display: when non-IST show both local and IST */}
         {date&&start&&end&&!endErr&&<div style={{display:'flex',flexDirection:'column',gap:6}}>
           {!isIST&&<div style={{background:'rgba(194,105,42,.06)',border:'1px solid rgba(194,105,42,.2)',borderRadius:9,padding:'9px 13px',fontSize:11,display:'flex',alignItems:'center',gap:8}}>
             <span style={{fontSize:13}}>🕐</span>
@@ -732,11 +640,7 @@ function DayModal({dateStr,bookings,profileId,userName,onBookHere,onClose,onCanc
           const m=TC[b.type]||TC.other
           const isOwn=userName&&b.bookedBy.toLowerCase()===userName.toLowerCase()
           const canCancel=isOwn&&(b.status==='pending')
-          return<div key={b.id} className="animate-fadeUp" style={{animationDelay:`${i*.07}s`,
-            background:b.status==='rejected'?'rgba(214,48,48,.1)':b.status==='pending'?'rgba(255,255,255,.95)':m.bg,
-            border:b.status==='rejected'?'1px solid rgba(214,48,48,.4)':b.status==='pending'?'2px dashed #e6a800':`1px solid ${m.border}`,
-            borderLeft:b.status==='rejected'?'4px solid #d63030':b.status==='pending'?'4px solid #e6a800':`3px solid ${m.color}`,
-            borderRadius:'0 12px 12px 0',padding:'12px 14px'}}>
+          return<div key={b.id} className="animate-fadeUp" style={{animationDelay:`${i*.07}s`,background:b.status==='rejected'?'rgba(214,48,48,.1)':b.status==='pending'?'rgba(255,255,255,.95)':m.bg,border:b.status==='rejected'?'1px solid rgba(214,48,48,.4)':b.status==='pending'?'2px dashed #e6a800':`1px solid ${m.border}`,borderLeft:b.status==='rejected'?'4px solid #d63030':b.status==='pending'?'4px solid #e6a800':`3px solid ${m.color}`,borderRadius:'0 12px 12px 0',padding:'12px 14px'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
               <span style={{fontSize:13,fontWeight:700,color:b.status==='rejected'?'#d63030':b.status==='pending'?'#a07000':m.color,fontFamily:'Syne,sans-serif'}}>{dTime(b.startTime)} — {dTime(b.endTime)} <span style={{fontSize:9,fontWeight:500,opacity:.7}}>IST</span></span>
               <div style={{display:'flex',gap:6,alignItems:'center'}}>
@@ -745,7 +649,7 @@ function DayModal({dateStr,bookings,profileId,userName,onBookHere,onClose,onCanc
               </div>
             </div>
             <div style={{fontSize:11,color:'rgba(90,82,72,.4)',marginTop:3}}>
-              {b.status==='approved'?'✓ Confirmed — full details visible to admin':b.status==='rejected'?'✕ Slot declined by admin':'⏳ Awaiting admin approval'}
+              {b.status==='approved'?'✓ Confirmed':b.status==='rejected'?'✕ Slot declined by admin':'⏳ Awaiting admin approval'}
             </div>
             {canCancel&&<button onClick={()=>onCancelRequest(b)} style={{marginTop:8,fontSize:10,fontWeight:600,color:'#c03838',background:'rgba(200,60,60,.08)',border:'1px solid rgba(200,60,60,.2)',borderRadius:6,padding:'3px 10px',cursor:'pointer',fontFamily:'Syne,sans-serif'}}>Cancel my booking</button>}
           </div>
@@ -784,16 +688,368 @@ function AdminLogin({onLogin,onBack}){
   </div>
 }
 
-// ─── Admin Panel ──────────────────────────────────────────────────
-function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClose,deleting,onAddProfile,onDeleteProfile,onSaveNotice,onDeleteNotice}){
+// ─── Links Vault Modal ────────────────────────────────────────────
+// ─── Links Page (Full Page, replaces modal) ───────────────────────
+function LinksPage({vaults,onClose,isAdmin,onAddVault,onDeleteVault,onAddLink,onEditLink,onDeleteLink}){
+  const[unlockedVaults,setUnlockedVaults]=useState({})
+  const[pinInputs,setPinInputs]=useState({})
+  const[pinError,setPinError]=useState({})
+  const[expandedVault,setExpandedVault]=useState(null)
+  const[addingLinkFor,setAddingLinkFor]=useState(null)
+  const[newLinkName,setNewLinkName]=useState('')
+  const[newLinkName2,setNewLinkName2]=useState('')
+  const[newLinkUrl,setNewLinkUrl]=useState('')
+  const[newLinkUrl2,setNewLinkUrl2]=useState('')
+  const[newLinkMsg,setNewLinkMsg]=useState('')
+  const[editingLink,setEditingLink]=useState(null)
+  const[editName,setEditName]=useState('')
+  const[editName2,setEditName2]=useState('')
+  const[editUrl,setEditUrl]=useState('')
+  const[editUrl2,setEditUrl2]=useState('')
+  const[editMsg,setEditMsg]=useState('')
+  const[newVaultName,setNewVaultName]=useState('')
+  const[newVaultPin,setNewVaultPin]=useState('')
+  const[newVaultColor,setNewVaultColor]=useState('interview')
+  const[showAddVault,setShowAddVault]=useState(false)
+  const[copied,setCopied]=useState({})
+
+  function copyText(text,key){
+    navigator.clipboard.writeText(text).then(()=>{
+      setCopied(prev=>({...prev,[key]:true}))
+      setTimeout(()=>setCopied(prev=>({...prev,[key]:false})),2000)
+    })
+  }
+
+  function attemptUnlock(vaultId,pin){
+    const vault=vaults.find(v=>v.id===vaultId)
+    if(!vault)return
+    if(pin===vault.passcode){
+      setUnlockedVaults(prev=>({...prev,[vaultId]:true}))
+      setPinError(prev=>({...prev,[vaultId]:false}))
+      setExpandedVault(vaultId)
+    }else{
+      setPinError(prev=>({...prev,[vaultId]:true}))
+    }
+  }
+
+  function saveEdit(){
+    if(!editName.trim())return
+    onEditLink(editingLink.vaultId,editingLink.index,{name:editName.trim(),name2:editName2.trim(),url:editUrl.trim(),url2:editUrl2.trim(),message:editMsg.trim()})
+    setEditingLink(null)
+  }
+
+  return(
+    <div style={{position:'fixed',inset:0,zIndex:500,display:'flex',flexDirection:'column',background:'var(--t-bg,#f5f4f0)',overflow:'hidden'}}>
+
+      {/* ── Top bar ── */}
+      <div style={{height:58,background:'rgba(255,255,255,.96)',borderBottom:'1px solid rgba(200,192,178,.32)',padding:'0 2rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <div style={{width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#1a1714,#3a3330)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🔗</div>
+          <div>
+            <h1 style={{fontFamily:'Syne,sans-serif',fontSize:'1.2rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.3px',margin:0}}>Link Vaults</h1>
+            <p style={{fontSize:10,color:'rgba(90,82,72,.45)',margin:0}}>
+              PIN-protected ·{isAdmin&&<span style={{color:'#c2692a',fontWeight:700}}> Admin Mode</span>}
+              {!isAdmin&&' Enter PIN to unlock'}
+            </p>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:10,alignItems:'center'}}>
+          {isAdmin&&<button onClick={()=>setShowAddVault(o=>!o)}
+            style={{padding:'8px 18px',borderRadius:9,border:'1.5px dashed rgba(194,105,42,.5)',background:showAddVault?'rgba(194,105,42,.1)':'transparent',color:'#c2692a',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Syne,sans-serif'}}>
+            {showAddVault?'✕ Cancel':'+ New Vault'}
+          </button>}
+          <button onClick={onClose}
+            style={{padding:'8px 20px',borderRadius:9,background:'#1a1714',border:'none',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Syne,sans-serif'}}>
+            ← Back
+          </button>
+        </div>
+      </div>
+
+      {/* ── Page body ── */}
+      <div style={{flex:1,overflowY:'auto',padding:'2rem 2.5rem'}}>
+
+        {/* Create Vault form — admin only */}
+        {isAdmin&&showAddVault&&<div style={{background:'rgba(255,255,255,.92)',border:'1px solid rgba(194,105,42,.25)',borderRadius:16,padding:'1.5rem',marginBottom:'2rem',maxWidth:720,boxShadow:'0 4px 24px rgba(80,60,40,.08)'}}>
+          <div style={{fontSize:11,fontWeight:700,color:'rgba(90,82,72,.5)',textTransform:'uppercase',letterSpacing:1,marginBottom:16,fontFamily:'Syne,sans-serif'}}>🔒 Create New Vault</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+            <div><label className="lbl">Vault Name</label><input className="f-in" placeholder="e.g. Interview Links" value={newVaultName} onChange={e=>setNewVaultName(e.target.value)}/></div>
+            <div><label className="lbl">4-Digit PIN</label><input className="f-in" placeholder="••••" maxLength={4} value={newVaultPin} onChange={e=>setNewVaultPin(e.target.value.replace(/\D/g,'').slice(0,4))} style={{fontFamily:'DM Mono,monospace',letterSpacing:6,fontSize:18,textAlign:'center'}}/></div>
+          </div>
+          <div style={{marginBottom:14}}>
+            <label className="lbl">Color Tag</label>
+            <div style={{display:'flex',gap:8}}>
+              {Object.entries(TC).map(([k,v])=><button key={k} onClick={()=>setNewVaultColor(k)}
+                style={{padding:'6px 16px',borderRadius:8,border:`1.5px solid ${newVaultColor===k?v.border:'rgba(200,192,178,.35)'}`,background:newVaultColor===k?v.bg:'transparent',color:v.color,fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Syne,sans-serif',transition:'all .15s'}}>
+                {k.charAt(0).toUpperCase()+k.slice(1)}
+              </button>)}
+            </div>
+          </div>
+          <button className="btn-dark"
+            onClick={()=>{if(!newVaultName.trim()||newVaultPin.length!==4)return;onAddVault({id:uid(),name:newVaultName.trim(),passcode:newVaultPin,color:newVaultColor,links:[]});setNewVaultName('');setNewVaultPin('');setNewVaultColor('interview');setShowAddVault(false)}}
+            style={{padding:'10px 24px',borderRadius:10,fontSize:13,opacity:newVaultName&&newVaultPin.length===4?1:.35,cursor:newVaultName&&newVaultPin.length===4?'pointer':'not-allowed'}}>
+            🔒 Create Vault
+          </button>
+        </div>}
+
+        {vaults.length===0&&<div style={{textAlign:'center',padding:'6rem 0',color:'rgba(90,82,72,.3)',fontSize:14}}>
+          <div style={{fontSize:52,marginBottom:16,opacity:.12}}>🔒</div>
+          {isAdmin?'Click "+ New Vault" to create your first vault.':'No vaults available yet.'}
+        </div>}
+
+        {/* ── Vault cards grid ── */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(500px,1fr))',gap:22}}>
+          {vaults.map(vault=>{
+            const isUnlocked=isAdmin||unlockedVaults[vault.id]
+            const isExpanded=isUnlocked||expandedVault===vault.id
+            const pin=pinInputs[vault.id]||''
+            const hasError=pinError[vault.id]
+            const m=TC[vault.color]||TC.other
+
+            return(
+              <div key={vault.id} style={{background:'rgba(255,255,255,.94)',border:`2px solid ${isUnlocked?m.border:'rgba(200,192,178,.3)'}`,borderRadius:20,overflow:'hidden',boxShadow:isUnlocked?`0 8px 36px ${m.border}28`:'0 2px 14px rgba(80,60,40,.05)',transition:'all .25s',display:'flex',flexDirection:'column'}}>
+
+                {/* Card header */}
+                <div style={{padding:'18px 22px',display:'flex',alignItems:'center',gap:14,background:isUnlocked?m.bg:'rgba(250,248,244,.85)',borderBottom:`1px solid ${isUnlocked?m.border:'rgba(200,192,178,.18)'}`,cursor:!isAdmin&&!isUnlocked?'pointer':'default'}}
+                  onClick={()=>!isAdmin&&!isUnlocked&&setExpandedVault(isExpanded?null:vault.id)}>
+                  <div style={{width:46,height:46,borderRadius:14,background:isUnlocked?m.color:'rgba(200,192,178,.22)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0,transition:'all .2s'}}>
+                    {isUnlocked?'🔓':'🔒'}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:17,fontWeight:800,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{vault.name}</div>
+                    <div style={{fontSize:11,color:'rgba(90,82,72,.5)',marginTop:3,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                      <span>{(vault.links||[]).length} item{(vault.links||[]).length!==1?'s':''}</span>
+                      {isAdmin&&<span style={{fontFamily:'DM Mono,monospace',fontWeight:700,color:m.color,background:'rgba(255,255,255,.85)',border:`1px solid ${m.border}`,padding:'2px 8px',borderRadius:5,letterSpacing:2,fontSize:11}}>PIN: {vault.passcode}</span>}
+                      <span className="tag" style={{background:m.bg,color:m.color,border:`1px solid ${m.border}`,fontSize:9}}>{vault.color}</span>
+                      {!isAdmin&&<span style={{fontWeight:600,color:isUnlocked?'#1a9070':'rgba(90,82,72,.4)'}}>{isUnlocked?'✓ Unlocked':'Click to unlock'}</span>}
+                    </div>
+                  </div>
+                  {!isAdmin&&!isUnlocked&&<span style={{fontSize:12,color:'rgba(90,82,72,.35)'}}>{isExpanded?'▲':'▼'}</span>}
+                  {isAdmin&&<button onClick={()=>{if(window.confirm(`Delete vault "${vault.name}"?`))onDeleteVault(vault.id)}}
+                    style={{background:'rgba(200,60,60,.09)',border:'1px solid rgba(200,60,60,.22)',color:'#c03838',cursor:'pointer',fontSize:11,padding:'5px 12px',borderRadius:8,fontFamily:'Syne,sans-serif',fontWeight:600,flexShrink:0,transition:'all .15s'}}
+                    onMouseOver={e=>e.currentTarget.style.background='rgba(200,60,60,.18)'}
+                    onMouseOut={e=>e.currentTarget.style.background='rgba(200,60,60,.09)'}>
+                    🗑 Delete
+                  </button>}
+                </div>
+
+                {/* PIN entry */}
+                {!isAdmin&&!isUnlocked&&isExpanded&&<div style={{padding:'16px 22px',background:'rgba(255,255,255,.7)',borderBottom:'1px solid rgba(200,192,178,.15)'}}>
+                  <div style={{fontSize:12,color:'rgba(90,82,72,.6)',marginBottom:12,fontWeight:600}}>Enter 4-digit PIN to unlock this vault</div>
+                  <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                    <input type="password" maxLength={4} placeholder="••••" value={pin}
+                      onChange={e=>{setPinInputs(prev=>({...prev,[vault.id]:e.target.value.replace(/\D/g,'').slice(0,4)}));setPinError(prev=>({...prev,[vault.id]:false}))}}
+                      onKeyDown={e=>e.key==='Enter'&&pin.length===4&&attemptUnlock(vault.id,pin)}
+                      style={{width:110,padding:'10px 14px',border:`2px solid ${hasError?'#d63030':'rgba(200,192,178,.5)'}`,borderRadius:10,fontSize:22,fontFamily:'DM Mono,monospace',letterSpacing:8,textAlign:'center',outline:'none',background:hasError?'rgba(214,48,48,.04)':'#fff',color:'#1a1714',transition:'border .15s'}}
+                      autoFocus/>
+                    <button onClick={()=>attemptUnlock(vault.id,pin)} disabled={pin.length!==4}
+                      style={{padding:'10px 20px',borderRadius:10,border:'none',background:pin.length===4?'#1a1714':'rgba(200,192,178,.3)',color:pin.length===4?'#fff':'rgba(90,82,72,.4)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:13,cursor:pin.length===4?'pointer':'not-allowed',transition:'all .15s'}}>
+                      Unlock →
+                    </button>
+                    {hasError&&<span style={{fontSize:12,color:'#d63030',fontWeight:700}}>⚠ Wrong PIN</span>}
+                  </div>
+                </div>}
+
+                {/* ── Unlocked content ── */}
+                {isUnlocked&&<div style={{padding:'16px 22px',flex:1,display:'flex',flexDirection:'column',gap:12}}>
+                  {(vault.links||[]).length===0&&<div style={{fontSize:12,color:'rgba(90,82,72,.35)',fontStyle:'italic',padding:'4px 0 8px'}}>No items yet.</div>}
+
+                  {/* Link items */}
+                  {(vault.links||[]).map((link,li)=>{
+                    const isEditing=editingLink?.vaultId===vault.id&&editingLink?.index===li
+                    const hasUrl=link.url&&link.url.trim()
+                    const hasUrl2=link.url2&&link.url2.trim()
+                    const hasMsg=link.message&&link.message.trim()
+                    const copyKey1=`${vault.id}-${li}-1`
+                    const copyKey2=`${vault.id}-${li}-2`
+
+                    if(isEditing)return(
+                      <div key={li} style={{padding:16,background:'rgba(255,255,255,.97)',borderRadius:14,border:'2px solid #c2692a',display:'flex',flexDirection:'column',gap:10}}>
+                        <div style={{fontSize:10,fontWeight:700,color:'#c2692a',fontFamily:'Syne,sans-serif',textTransform:'uppercase',letterSpacing:1}}>✏ Editing Item</div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                          <div>
+                            <label className="lbl">Name 1 *</label>
+                            <input className="f-in" placeholder="e.g. Interview Room" value={editName} onChange={e=>setEditName(e.target.value)}/>
+                          </div>
+                          <div>
+                            <label className="lbl">Name 2 <span style={{fontStyle:'italic',textTransform:'none',letterSpacing:0,color:'rgba(90,82,72,.3)',fontWeight:400}}>(optional)</span></label>
+                            <input className="f-in" placeholder="e.g. Chat Room" value={editName2} onChange={e=>setEditName2(e.target.value)}/>
+                          </div>
+                        </div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                          <div>
+                            <label className="lbl">Link 1 (optional)</label>
+                            <input className="f-in" placeholder="https://..." value={editUrl} onChange={e=>setEditUrl(e.target.value)}/>
+                          </div>
+                          <div>
+                            <label className="lbl">Link 2 (optional)</label>
+                            <input className="f-in" placeholder="https://..." value={editUrl2} onChange={e=>setEditUrl2(e.target.value)}/>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="lbl">Message / Note (optional)</label>
+                          <textarea className="f-in" rows={2} placeholder="Any message to show users…" value={editMsg} onChange={e=>setEditMsg(e.target.value)} style={{resize:'vertical'}}/>
+                        </div>
+                        <div style={{display:'flex',gap:8}}>
+                          <button onClick={()=>setEditingLink(null)} style={{flex:1,padding:'9px',borderRadius:9,border:'1px solid rgba(200,192,178,.4)',background:'transparent',color:'rgba(90,82,72,.6)',fontSize:12,cursor:'pointer'}}>Cancel</button>
+                          <button onClick={saveEdit} style={{flex:2,padding:'9px',borderRadius:9,border:'none',background:'#1a1714',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Syne,sans-serif'}}>Save Changes ✓</button>
+                        </div>
+                      </div>
+                    )
+
+                    return(
+                      <div key={li} style={{background:'rgba(255,255,255,.9)',borderRadius:14,border:'1px solid rgba(200,192,178,.22)',overflow:'hidden'}}>
+                        {/* Item name row */}
+                        <div style={{padding:'12px 16px 10px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:(hasUrl||hasUrl2||hasMsg)?'1px solid rgba(200,192,178,.15)':'none'}}>
+                          <div style={{display:'flex',gap:16,alignItems:'center',flex:1}}>
+                            <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                              <div style={{fontSize:9,fontWeight:700,color:'rgba(90,82,72,.38)',textTransform:'uppercase',letterSpacing:1,fontFamily:'Syne,sans-serif'}}>Name 1</div>
+                              <div style={{fontSize:13,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{link.name}</div>
+                            </div>
+                            {link.name2&&link.name2.trim()&&<>
+                              <div style={{width:1,height:32,background:'rgba(200,192,178,.3)'}}/>
+                              <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                                <div style={{fontSize:9,fontWeight:700,color:'rgba(90,82,72,.38)',textTransform:'uppercase',letterSpacing:1,fontFamily:'Syne,sans-serif'}}>Name 2</div>
+                                <div style={{fontSize:13,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{link.name2}</div>
+                              </div>
+                            </>}
+                          </div>
+                          {isAdmin&&<div style={{display:'flex',gap:6}}>
+                            <button onClick={()=>{setEditingLink({vaultId:vault.id,index:li});setEditName(link.name);setEditName2(link.name2||'');setEditUrl(link.url||'');setEditUrl2(link.url2||'');setEditMsg(link.message||'')}}
+                              style={{fontSize:11,padding:'4px 10px',borderRadius:7,border:'1px solid rgba(194,105,42,.3)',background:'rgba(194,105,42,.07)',color:'#c2692a',cursor:'pointer',fontFamily:'Syne,sans-serif',fontWeight:600}}>Edit</button>
+                            <button onClick={()=>{if(window.confirm(`Delete "${link.name}"?`))onDeleteLink(vault.id,li)}}
+                              style={{fontSize:11,padding:'4px 10px',borderRadius:7,border:'1px solid rgba(200,60,60,.2)',background:'rgba(200,60,60,.06)',color:'#c03838',cursor:'pointer',fontFamily:'Syne,sans-serif',fontWeight:600}}>Delete</button>
+                          </div>}
+                        </div>
+
+                        {/* Two URL columns */}
+                        {(hasUrl||hasUrl2)&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,borderBottom:hasMsg?'1px solid rgba(200,192,178,.15)':'none'}}>
+                          {/* URL 1 */}
+                          <div style={{padding:'10px 16px',borderRight:'1px solid rgba(200,192,178,.15)',display:'flex',flexDirection:'column',gap:6}}>
+                            <div style={{fontSize:9,fontWeight:700,color:'rgba(90,82,72,.4)',textTransform:'uppercase',letterSpacing:1,fontFamily:'Syne,sans-serif'}}>Link 1</div>
+                            {hasUrl
+                              ?<>
+                                <a href={link.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'#1878c8',textDecoration:'none',wordBreak:'break-all',lineHeight:1.5,flex:1}}>{link.url}</a>
+                                <div style={{display:'flex',gap:6,marginTop:4}}>
+                                  <a href={link.url} target="_blank" rel="noopener noreferrer"
+                                    style={{fontSize:11,padding:'5px 12px',borderRadius:7,background:'rgba(24,120,200,.1)',color:'#1878c8',border:'1px solid rgba(24,120,200,.2)',textDecoration:'none',fontWeight:600,whiteSpace:'nowrap'}}>Open →</a>
+                                  <button onClick={()=>copyText(link.url,copyKey1)}
+                                    style={{fontSize:11,padding:'5px 12px',borderRadius:7,background:copied[copyKey1]?'rgba(30,160,120,.12)':'rgba(200,192,178,.12)',color:copied[copyKey1]?'#1a9070':'rgba(90,82,72,.6)',border:`1px solid ${copied[copyKey1]?'rgba(30,160,120,.3)':'rgba(200,192,178,.3)'}`,cursor:'pointer',fontWeight:600,fontFamily:'Syne,sans-serif',transition:'all .2s',whiteSpace:'nowrap'}}>
+                                    {copied[copyKey1]?'✓ Copied':'📋 Copy'}
+                                  </button>
+                                </div>
+                              </>
+                              :<div style={{fontSize:11,color:'rgba(90,82,72,.25)',fontStyle:'italic'}}>—</div>
+                            }
+                          </div>
+
+                          {/* URL 2 */}
+                          <div style={{padding:'10px 16px',display:'flex',flexDirection:'column',gap:6}}>
+                            <div style={{fontSize:9,fontWeight:700,color:'rgba(90,82,72,.4)',textTransform:'uppercase',letterSpacing:1,fontFamily:'Syne,sans-serif'}}>Link 2</div>
+                            {hasUrl2
+                              ?<>
+                                <a href={link.url2} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'#1878c8',textDecoration:'none',wordBreak:'break-all',lineHeight:1.5,flex:1}}>{link.url2}</a>
+                                <div style={{display:'flex',gap:6,marginTop:4}}>
+                                  <a href={link.url2} target="_blank" rel="noopener noreferrer"
+                                    style={{fontSize:11,padding:'5px 12px',borderRadius:7,background:'rgba(24,120,200,.1)',color:'#1878c8',border:'1px solid rgba(24,120,200,.2)',textDecoration:'none',fontWeight:600,whiteSpace:'nowrap'}}>Open →</a>
+                                  <button onClick={()=>copyText(link.url2,copyKey2)}
+                                    style={{fontSize:11,padding:'5px 12px',borderRadius:7,background:copied[copyKey2]?'rgba(30,160,120,.12)':'rgba(200,192,178,.12)',color:copied[copyKey2]?'#1a9070':'rgba(90,82,72,.6)',border:`1px solid ${copied[copyKey2]?'rgba(30,160,120,.3)':'rgba(200,192,178,.3)'}`,cursor:'pointer',fontWeight:600,fontFamily:'Syne,sans-serif',transition:'all .2s',whiteSpace:'nowrap'}}>
+                                    {copied[copyKey2]?'✓ Copied':'📋 Copy'}
+                                  </button>
+                                </div>
+                              </>
+                              :<div style={{fontSize:11,color:'rgba(90,82,72,.25)',fontStyle:'italic'}}>—</div>
+                            }
+                          </div>
+                        </div>}
+
+                        {/* Message */}
+                        {hasMsg&&<div style={{padding:'10px 16px',fontSize:11,color:'rgba(90,82,72,.72)',lineHeight:1.65,background:'rgba(194,105,42,.04)',whiteSpace:'pre-wrap'}}>💬 {link.message}</div>}
+                      </div>
+                    )
+                  })}
+
+                  {/* Add item — admin only */}
+                  {isAdmin&&<div style={{marginTop:4}}>
+                    {addingLinkFor!==vault.id
+                      ?<button onClick={()=>{setAddingLinkFor(vault.id);setNewLinkName('');setNewLinkUrl('');setNewLinkUrl2('');setNewLinkMsg('')}}
+                        style={{fontSize:12,padding:'8px 18px',borderRadius:9,border:'1.5px dashed rgba(194,105,42,.5)',background:'transparent',color:'#c2692a',cursor:'pointer',fontFamily:'Syne,sans-serif',fontWeight:700}}>
+                        + Add Link / Message
+                      </button>
+                      :<div style={{padding:16,background:'rgba(194,105,42,.04)',borderRadius:14,border:'1px solid rgba(194,105,42,.2)',display:'flex',flexDirection:'column',gap:12}}>
+                        <div style={{fontSize:10,fontWeight:700,color:'#c2692a',fontFamily:'Syne,sans-serif',textTransform:'uppercase',letterSpacing:1}}>New Item</div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                          <div>
+                            <label className="lbl">Name 1 *</label>
+                            <input className="f-in" placeholder="e.g. Interview Room" value={newLinkName} onChange={e=>setNewLinkName(e.target.value)}/>
+                          </div>
+                          <div>
+                            <label className="lbl">Name 2 <span style={{fontStyle:'italic',textTransform:'none',letterSpacing:0,color:'rgba(90,82,72,.3)',fontWeight:400}}>(optional)</span></label>
+                            <input className="f-in" placeholder="e.g. Chat Room" value={newLinkName2} onChange={e=>setNewLinkName2(e.target.value)}/>
+                          </div>
+                        </div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                          <div>
+                            <label className="lbl">Link 1 (optional)</label>
+                            <input className="f-in" placeholder="https://..." value={newLinkUrl} onChange={e=>setNewLinkUrl(e.target.value)}/>
+                          </div>
+                          <div>
+                            <label className="lbl">Link 2 (optional)</label>
+                            <input className="f-in" placeholder="https://..." value={newLinkUrl2} onChange={e=>setNewLinkUrl2(e.target.value)}/>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="lbl">Message / Note (optional)</label>
+                          <textarea className="f-in" rows={2} placeholder="Any message or instructions for users…" value={newLinkMsg} onChange={e=>setNewLinkMsg(e.target.value)} style={{resize:'vertical'}}/>
+                        </div>
+                        <div style={{display:'flex',gap:8}}>
+                          <button onClick={()=>setAddingLinkFor(null)} style={{flex:1,padding:'9px',borderRadius:9,border:'1px solid rgba(200,192,178,.4)',background:'transparent',color:'rgba(90,82,72,.6)',fontSize:12,cursor:'pointer'}}>Cancel</button>
+                          <button onClick={()=>{if(!newLinkName.trim())return;onAddLink(vault.id,{name:newLinkName.trim(),name2:newLinkName2.trim(),url:newLinkUrl.trim(),url2:newLinkUrl2.trim(),message:newLinkMsg.trim()});setNewLinkName('');setNewLinkName2('');setNewLinkUrl('');setNewLinkUrl2('');setNewLinkMsg('');setAddingLinkFor(null)}}
+                            style={{flex:2,padding:'9px',borderRadius:9,border:'none',background:newLinkName?'#1a1714':'rgba(200,192,178,.3)',color:newLinkName?'#fff':'rgba(90,82,72,.4)',fontSize:12,fontWeight:700,cursor:newLinkName?'pointer':'not-allowed',fontFamily:'Syne,sans-serif',transition:'all .15s'}}>
+                            Save Item ✓
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </div>}
+                </div>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClose,deleting,onAddProfile,onDeleteProfile,onSaveNotice,onDeleteNotice,vaults,onAddVault,onDeleteVault,onAddLink,onEditLink,onDeleteLink}){
   const[tab,setTab]=useState('bookings')
   const[search,setSearch]=useState('');const[dateF,setDateF]=useState('');const[typeF,setTypeF]=useState('');const[profF,setProfF]=useState('');const[statusF,setStatusF]=useState('')
   const[newName,setNewName]=useState('');const[newRole,setNewRole]=useState('')
   const[noticeTitle,setNoticeTitle]=useState('');const[noticeMsg,setNoticeMsg]=useState('');const[noticeSaving,setNoticeSaving]=useState(false)
   const[adminTheme,setAdminTheme]=useState(()=>localStorage.getItem('slotbook-admin-theme')||'default')
   const[descModal,setDescModal]=useState(null)
+  // Vault form state
+  const[newVaultName,setNewVaultName]=useState('')
+  const[newVaultPin,setNewVaultPin]=useState('')
+  const[newVaultColor,setNewVaultColor]=useState('interview')
+  // Link form state
+  const[addingLinkFor,setAddingLinkFor]=useState(null)
+  const[newLinkName,setNewLinkName]=useState('')
+  const[newLinkName2,setNewLinkName2]=useState('')
+  const[newLinkUrl,setNewLinkUrl]=useState('')
+  const[newLinkUrl2,setNewLinkUrl2]=useState('')
+  const[newLinkMsg,setNewLinkMsg]=useState('')
+  // Edit link state
+  const[editingLink,setEditingLink]=useState(null)
+  const[editName,setEditName]=useState('')
+  const[editName2,setEditName2]=useState('')
+  const[editUrl,setEditUrl]=useState('')
+  const[editUrl2,setEditUrl2]=useState('')
+  const[editMsg,setEditMsg]=useState('')
+  const[copied,setCopied]=useState({})
+
   const at=ADMIN_THEMES[adminTheme]
-  const today=fmtDate(new Date());const mp=today.slice(0,7)
+  const today=fmtDate(new Date())
   const filtered=bookings.filter(b=>{
     const ms=!search||(b.title+' '+(b.desc||'')+' '+b.bookedBy).toLowerCase().includes(search.toLowerCase())
     return ms&&(!dateF||b.date===dateF)&&(!typeF||b.type===typeF)&&(!profF||b.profileId===profF)&&(!statusF||b.status===statusF)
@@ -808,36 +1064,47 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
     setNoticeTitle('');setNoticeMsg('');setNoticeSaving(false)
   }
 
+  function saveEditLink(){
+    if(!editName.trim())return
+    onEditLink(editingLink.vaultId,editingLink.index,{name:editName.trim(),name2:editName2.trim(),url:editUrl.trim(),url2:editUrl2.trim(),message:editMsg.trim()})
+    setEditingLink(null)
+  }
+
   return<div style={{background:at?at.bg:'#f5f4f0',minHeight:'100%',display:'flex',flexDirection:'column',position:'relative',zIndex:1,color:at?at.text:'#1a1714',transition:'background .3s'}}>
     {descModal&&<DescModal booking={descModal} profiles={profiles} onClose={()=>setDescModal(null)}/>}
+
+    {/* Top bar */}
     <div style={{height:58,background:at?at.header:'rgba(245,244,240,.95)',borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.32)'}`,padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
-        <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.2)'}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/><circle cx="12" cy="3.2" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="12" cy="20.8" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="3.2" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="20.8" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/><line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/><line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/><circle cx="12" cy="12" r="1.6" fill="#c2692a"/></svg></div>
+        <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.2)'}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/><line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/><line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/><circle cx="12" cy="12" r="1.6" fill="#c2692a"/></svg>
+        </div>
         <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.3rem',fontWeight:800,color:at?at.text:'#1a1714',letterSpacing:'-.3px'}}>SlotBook</span>
         <span className="tag" style={{background:'rgba(194,105,42,.1)',color:'#c2692a',border:'1px solid rgba(194,105,42,.22)'}}>Admin</span>
         {pending>0&&<span style={{background:'rgba(200,60,60,.12)',color:'#c03838',border:'1px solid rgba(200,60,60,.3)',borderRadius:20,padding:'2px 10px',fontSize:11,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{pending} pending</span>}
       </div>
-      <div style={{display:'flex',alignItems:'center',gap:8}}>
-        {/* Admin Theme buttons blended with Exit */}
-        <div style={{display:'flex',alignItems:'center',gap:6}}>
-          {Object.entries(ADMIN_THEMES).map(([key,t])=>{
-            const isActive=adminTheme===key
-            return<button key={key} onClick={()=>{setAdminTheme(key);localStorage.setItem('slotbook-admin-theme',key)}}
-              title={t.name}
-              style={{padding:'7px 14px',borderRadius:8,fontSize:11,fontWeight:700,fontFamily:'Syne,sans-serif',cursor:'pointer',border:`1px solid ${isActive?t.accent:'rgba(200,192,178,.45)'}`,background:isActive?t.btn:'rgba(255,255,255,.85)',color:isActive?'#fff':t.accent,transition:'all .22s',boxShadow:isActive?`0 2px 12px ${t.accent}40`:'none',transform:isActive?'translateY(-1px)':'none'}}>
-              {t.name}
-            </button>
-          })}
-          <button className="btn-soft" onClick={onClose} style={{padding:'7px 16px',borderRadius:8,fontSize:12,marginLeft:4}}>← Exit Admin</button>
-        </div>
+      <div style={{display:'flex',alignItems:'center',gap:6}}>
+        {Object.entries(ADMIN_THEMES).map(([key,t])=>{
+          const isActive=adminTheme===key
+          return<button key={key} onClick={()=>{setAdminTheme(key);localStorage.setItem('slotbook-admin-theme',key)}}
+            title={t.name}
+            style={{padding:'7px 14px',borderRadius:8,fontSize:11,fontWeight:700,fontFamily:'Syne,sans-serif',cursor:'pointer',border:`1px solid ${isActive?t.accent:'rgba(200,192,178,.45)'}`,background:isActive?t.btn:'rgba(255,255,255,.85)',color:isActive?'#fff':t.accent,transition:'all .22s',boxShadow:isActive?`0 2px 12px ${t.accent}40`:'none',transform:isActive?'translateY(-1px)':'none'}}>
+            {t.name}
+          </button>
+        })}
+        <button className="btn-soft" onClick={onClose} style={{padding:'7px 16px',borderRadius:8,fontSize:12,marginLeft:4}}>← Exit Admin</button>
       </div>
     </div>
-    <div style={{display:'flex',gap:0,borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.3)'}`,background:at?`rgba(255,255,255,.06)`:'rgba(255,255,255,.6)',flexShrink:0}}>
-      {[['bookings','📅 Bookings'],['profiles','👤 Profiles'],['notices','📢 Notices']].map(([k,lbl])=><button key={k} onClick={()=>setTab(k)}
-        style={{padding:'12px 24px',background:'transparent',border:'none',borderBottom:`2px solid ${tab===k?'#c2692a':'transparent'}`,color:tab===k?'#c2692a':at?`${at.muted}`:'rgba(90,82,72,.6)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:13,cursor:'pointer',transition:'all .2s'}}>
+
+    {/* Tabs */}
+    <div style={{display:'flex',gap:0,borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.3)'}`,background:at?'rgba(255,255,255,.06)':'rgba(255,255,255,.6)',flexShrink:0}}>
+      {[['bookings','📅 Bookings'],['profiles','👤 Profiles'],['notices','📢 Notices'],['links','🔗 Link Vaults']].map(([k,lbl])=><button key={k} onClick={()=>setTab(k)}
+        style={{padding:'12px 24px',background:'transparent',border:'none',borderBottom:`2px solid ${tab===k?'#c2692a':'transparent'}`,color:tab===k?'#c2692a':at?at.muted:'rgba(90,82,72,.6)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:13,cursor:'pointer',transition:'all .2s'}}>
         {lbl}{k==='notices'&&notices.length>0&&<span style={{marginLeft:5,background:'rgba(194,105,42,.15)',color:'#c2692a',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:800}}>{notices.filter(n=>n.active!==false).length}</span>}
+        {k==='links'&&(vaults||[]).length>0&&<span style={{marginLeft:5,background:'rgba(194,105,42,.15)',color:'#c2692a',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:800}}>{(vaults||[]).length}</span>}
       </button>)}
     </div>
+
     <div style={{flex:1,overflowY:'auto',padding:'1.5rem',position:'relative',zIndex:1}}>
 
       {/* ── BOOKINGS TAB ── */}
@@ -876,7 +1143,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
             <table className="adm-tbl">
               <thead><tr><th>Status</th><th>Profile</th><th>Booked By</th><th>Phone</th><th>Title</th><th>Date</th><th>Day</th><th>Start (IST)</th><th>End (IST)</th><th>Type</th><th>Description</th><th>Actions</th></tr></thead>
               <tbody>
-                {filtered.length===0?<tr><td colSpan={11} style={{textAlign:'center',padding:'3rem',color:'rgba(90,82,72,.28)'}}><div style={{fontSize:28,marginBottom:8,opacity:.2}}>◇</div><p style={{fontSize:13}}>No bookings found.</p></td></tr>
+                {filtered.length===0?<tr><td colSpan={12} style={{textAlign:'center',padding:'3rem',color:'rgba(90,82,72,.28)'}}><div style={{fontSize:28,marginBottom:8,opacity:.2}}>◇</div><p style={{fontSize:13}}>No bookings found.</p></td></tr>
                 :filtered.map((b,i)=>{
                   const m=TC[b.type]||TC.other;const prof=profiles.find(p=>p.id===b.profileId)
                   const isPending=(b.status||'pending')==='pending';const isApproved=b.status==='approved'
@@ -947,7 +1214,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
           <div style={{fontSize:11,fontWeight:700,color:'rgba(90,82,72,.5)',textTransform:'uppercase',letterSpacing:1,marginBottom:14,fontFamily:'Syne,sans-serif'}}>Post a New Notice</div>
           <div style={{display:'flex',flexDirection:'column',gap:12}}>
             <div><label className="lbl">Notice Title</label><input className="f-in" placeholder="e.g. Office closed on Friday" value={noticeTitle} onChange={e=>setNoticeTitle(e.target.value)}/></div>
-            <div><label className="lbl">Full Message</label><textarea className="f-in" rows={4} style={{resize:'vertical'}} placeholder="Write the full notice here. Users will see a preview in the scrolling banner and can click to read the full message…" value={noticeMsg} onChange={e=>setNoticeMsg(e.target.value)}/></div>
+            <div><label className="lbl">Full Message</label><textarea className="f-in" rows={4} style={{resize:'vertical'}} placeholder="Write the full notice here…" value={noticeMsg} onChange={e=>setNoticeMsg(e.target.value)}/></div>
             <button className="btn-dark" onClick={postNotice} style={{alignSelf:'flex-start',padding:'11px 24px',borderRadius:10,fontSize:13,opacity:noticeTitle&&noticeMsg?1:.4,cursor:noticeTitle&&noticeMsg?'pointer':'not-allowed'}}>
               {noticeSaving?'Posting…':'📢 Post Notice'}
             </button>
@@ -975,11 +1242,190 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
           </div>)}
         </div>
       </>}
+
+      {/* ── LINK VAULTS TAB ── */}
+      {tab==='links'&&<>
+        {/* Create Vault Form */}
+        <div className="card" style={{padding:'1.5rem',marginBottom:'1.5rem'}}>
+          <div style={{fontSize:11,fontWeight:700,color:'rgba(90,82,72,.5)',textTransform:'uppercase',letterSpacing:1,marginBottom:16,fontFamily:'Syne,sans-serif',display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:16}}>🔒</span> Create New Link Vault
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div><label className="lbl">Vault Name</label><input className="f-in" placeholder="e.g. Zoom Links, Docs, Resources" value={newVaultName} onChange={e=>setNewVaultName(e.target.value)}/></div>
+              <div><label className="lbl">4-Digit PIN</label><input className="f-in" placeholder="e.g. 1234" maxLength={4} value={newVaultPin} onChange={e=>setNewVaultPin(e.target.value.replace(/\D/g,'').slice(0,4))} style={{fontFamily:'DM Mono,monospace',letterSpacing:6,fontSize:18,textAlign:'center'}}/></div>
+            </div>
+            <div>
+              <label className="lbl">Color Tag</label>
+              <div style={{display:'flex',gap:8}}>
+                {Object.entries(TC).map(([k,v])=><button key={k} onClick={()=>setNewVaultColor(k)}
+                  style={{padding:'6px 16px',borderRadius:8,border:`1.5px solid ${newVaultColor===k?v.border:'rgba(200,192,178,.35)'}`,background:newVaultColor===k?v.bg:'transparent',color:v.color,fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Syne,sans-serif',transition:'all .15s',boxShadow:newVaultColor===k?`0 2px 8px ${v.border}`:'none'}}>
+                  {k.charAt(0).toUpperCase()+k.slice(1)}
+                </button>)}
+              </div>
+            </div>
+            <button className="btn-dark"
+              onClick={()=>{if(!newVaultName.trim()||newVaultPin.length!==4)return;onAddVault({id:uid(),name:newVaultName.trim(),passcode:newVaultPin,color:newVaultColor,links:[]});setNewVaultName('');setNewVaultPin('');setNewVaultColor('interview')}}
+              style={{alignSelf:'flex-start',padding:'11px 28px',borderRadius:10,fontSize:13,opacity:newVaultName&&newVaultPin.length===4?1:.35,cursor:newVaultName&&newVaultPin.length===4?'pointer':'not-allowed'}}>
+              🔒 Create Vault
+            </button>
+          </div>
+        </div>
+
+        <div style={{fontSize:11,fontWeight:700,color:'rgba(90,82,72,.5)',textTransform:'uppercase',letterSpacing:1,marginBottom:12,fontFamily:'Syne,sans-serif'}}>
+          Your Vaults ({(vaults||[]).length})
+        </div>
+
+        {(vaults||[]).length===0&&<div className="card" style={{padding:'3rem',textAlign:'center',color:'rgba(90,82,72,.3)',fontSize:13}}>
+          <div style={{fontSize:40,marginBottom:12,opacity:.15}}>🔒</div>
+          No vaults yet. Create one above.
+        </div>}
+
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          {(vaults||[]).map(vault=>{
+            const m=TC[vault.color]||TC.other
+            return<div key={vault.id} className="card animate-fadeUp" style={{padding:0,overflow:'hidden',border:`1.5px solid ${m.border}`,background:m.bg}}>
+              {/* Vault header */}
+              <div style={{padding:'14px 18px',display:'flex',alignItems:'center',gap:12,borderBottom:`1px solid ${m.border}`,background:'rgba(255,255,255,.5)'}}>
+                <div style={{width:40,height:40,borderRadius:11,background:m.color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🔓</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:15,fontWeight:800,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{vault.name}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:10,marginTop:3}}>
+                    <span style={{fontSize:11,color:'rgba(90,82,72,.5)'}}>{(vault.links||[]).length} item{(vault.links||[]).length!==1?'s':''}</span>
+                    <span style={{fontSize:11,fontFamily:'DM Mono,monospace',fontWeight:700,color:m.color,background:'rgba(255,255,255,.7)',border:`1px solid ${m.border}`,padding:'2px 10px',borderRadius:6,letterSpacing:3}}>PIN: {vault.passcode}</span>
+                    <span className="tag" style={{background:m.bg,color:m.color,border:`1px solid ${m.border}`,fontSize:10}}>{vault.color}</span>
+                  </div>
+                </div>
+                <button onClick={()=>{if(!window.confirm(`Delete vault "${vault.name}" and all its contents?`))return;onDeleteVault(vault.id)}}
+                  style={{background:'rgba(200,60,60,.1)',border:'1px solid rgba(200,60,60,.25)',color:'#c03838',cursor:'pointer',fontSize:11,padding:'6px 14px',borderRadius:8,fontFamily:'Syne,sans-serif',fontWeight:700,transition:'all .15s'}}
+                  onMouseOver={e=>e.currentTarget.style.background='rgba(200,60,60,.2)'}
+                  onMouseOut={e=>e.currentTarget.style.background='rgba(200,60,60,.1)'}>
+                  🗑 Delete Vault
+                </button>
+              </div>
+
+              {/* Links inside vault */}
+              <div style={{padding:'14px 18px'}}>
+                {(vault.links||[]).length===0&&<div style={{fontSize:12,color:'rgba(90,82,72,.35)',fontStyle:'italic',padding:'6px 0 10px'}}>No items yet. Add a link or message below.</div>}
+                <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:12}}>
+                  {(vault.links||[]).map((link,li)=>{
+                    const isEditing=editingLink?.vaultId===vault.id&&editingLink?.index===li
+                    const hasUrl=link.url&&link.url.trim()
+                    const hasUrl2=link.url2&&link.url2.trim()
+                    const hasMsg=link.message&&link.message.trim()
+
+                    if(isEditing)return<div key={li} style={{padding:14,background:'rgba(255,255,255,.95)',borderRadius:11,border:'2px solid #c2692a',display:'flex',flexDirection:'column',gap:9}}>
+                      <div style={{fontSize:10,fontWeight:700,color:'#c2692a',fontFamily:'Syne,sans-serif',textTransform:'uppercase',letterSpacing:1}}>✏ Editing Item</div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
+                        <div><label className="lbl">Name 1 *</label><input className="f-in" value={editName} onChange={e=>setEditName(e.target.value)} placeholder="e.g. Interview Room"/></div>
+                        <div><label className="lbl">Name 2 (optional)</label><input className="f-in" value={editName2} onChange={e=>setEditName2(e.target.value)} placeholder="e.g. Chat Room"/></div>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
+                        <div><label className="lbl">Link 1 (optional)</label><input className="f-in" value={editUrl} onChange={e=>setEditUrl(e.target.value)} placeholder="https://..."/></div>
+                        <div><label className="lbl">Link 2 (optional)</label><input className="f-in" value={editUrl2} onChange={e=>setEditUrl2(e.target.value)} placeholder="https://..."/></div>
+                      </div>
+                      <div><label className="lbl">Message / Note (optional)</label><textarea className="f-in" rows={2} value={editMsg} onChange={e=>setEditMsg(e.target.value)} placeholder="Any message to show users…" style={{resize:'vertical'}}/></div>
+                      <div style={{display:'flex',gap:8}}>
+                        <button onClick={()=>setEditingLink(null)} style={{flex:1,padding:'9px',borderRadius:8,border:'1px solid rgba(200,192,178,.4)',background:'transparent',color:'rgba(90,82,72,.6)',fontSize:12,cursor:'pointer'}}>Cancel</button>
+                        <button onClick={saveEditLink} style={{flex:2,padding:'9px',borderRadius:8,border:'none',background:'#1a1714',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Syne,sans-serif'}}>Save Changes ✓</button>
+                      </div>
+                    </div>
+
+                    return<div key={li} style={{background:'rgba(255,255,255,.88)',borderRadius:11,border:'1px solid rgba(200,192,178,.22)',overflow:'hidden'}}>
+                      {/* Item name + actions */}
+                      <div style={{padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:(hasUrl||hasUrl2||hasMsg)?'1px solid rgba(200,192,178,.15)':'none'}}>
+                        <div style={{display:'flex',gap:14,alignItems:'center'}}>
+                          <div style={{display:'flex',flexDirection:'column',gap:1}}>
+                            <div style={{fontSize:8,fontWeight:700,color:'rgba(90,82,72,.35)',textTransform:'uppercase',letterSpacing:1,fontFamily:'Syne,sans-serif'}}>Name 1</div>
+                            <div style={{fontSize:13,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{link.name}</div>
+                          </div>
+                          {link.name2&&link.name2.trim()&&<><div style={{width:1,height:28,background:'rgba(200,192,178,.3)'}}/>
+                          <div style={{display:'flex',flexDirection:'column',gap:1}}>
+                            <div style={{fontSize:8,fontWeight:700,color:'rgba(90,82,72,.35)',textTransform:'uppercase',letterSpacing:1,fontFamily:'Syne,sans-serif'}}>Name 2</div>
+                            <div style={{fontSize:13,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{link.name2}</div>
+                          </div></>}
+                        </div>
+                        <div style={{display:'flex',gap:6}}>
+                          <button onClick={()=>{setEditingLink({vaultId:vault.id,index:li});setEditName(link.name);setEditName2(link.name2||'');setEditUrl(link.url||'');setEditUrl2(link.url2||'');setEditMsg(link.message||'')}}
+                            style={{fontSize:11,padding:'4px 10px',borderRadius:7,border:'1px solid rgba(194,105,42,.3)',background:'rgba(194,105,42,.07)',color:'#c2692a',cursor:'pointer',fontFamily:'Syne,sans-serif',fontWeight:600}}>Edit</button>
+                          <button onClick={()=>{if(!window.confirm(`Delete "${link.name}"?`))return;onDeleteLink(vault.id,li)}}
+                            style={{fontSize:11,padding:'4px 10px',borderRadius:7,border:'1px solid rgba(200,60,60,.25)',background:'rgba(200,60,60,.07)',color:'#c03838',cursor:'pointer',fontFamily:'Syne,sans-serif',fontWeight:600}}>Delete</button>
+                        </div>
+                      </div>
+                      {/* Two URL columns */}
+                      {(hasUrl||hasUrl2)&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',borderBottom:hasMsg?'1px solid rgba(200,192,178,.15)':'none'}}>
+                        <div style={{padding:'10px 14px',borderRight:'1px solid rgba(200,192,178,.15)'}}>
+                          <div style={{fontSize:9,fontWeight:700,color:'rgba(90,82,72,.4)',textTransform:'uppercase',letterSpacing:1,fontFamily:'Syne,sans-serif',marginBottom:5}}>Link 1</div>
+                          {hasUrl
+                            ?<><a href={link.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'#1878c8',textDecoration:'none',display:'block',marginBottom:6,wordBreak:'break-all',lineHeight:1.5}}>{link.url}</a>
+                              <div style={{display:'flex',gap:5}}>
+                                <a href={link.url} target="_blank" rel="noopener noreferrer" style={{fontSize:10,padding:'4px 10px',borderRadius:6,background:'rgba(24,120,200,.1)',color:'#1878c8',border:'1px solid rgba(24,120,200,.2)',textDecoration:'none',fontWeight:600}}>Open →</a>
+                                <button onClick={()=>navigator.clipboard.writeText(link.url).then(()=>{setCopied(prev=>({...prev,[`${vault.id}-${li}-1`]:true}));setTimeout(()=>setCopied(prev=>({...prev,[`${vault.id}-${li}-1`]:false})),2000)})}
+                                  style={{fontSize:10,padding:'4px 10px',borderRadius:6,background:copied[`${vault.id}-${li}-1`]?'rgba(30,160,120,.12)':'rgba(200,192,178,.15)',color:copied[`${vault.id}-${li}-1`]?'#1a9070':'rgba(90,82,72,.6)',border:'1px solid rgba(200,192,178,.3)',cursor:'pointer',fontWeight:600,fontFamily:'Syne,sans-serif',transition:'all .2s'}}>
+                                  {copied[`${vault.id}-${li}-1`]?'✓ Copied':'📋 Copy'}
+                                </button>
+                              </div>
+                            </>
+                            :<span style={{fontSize:11,color:'rgba(90,82,72,.25)',fontStyle:'italic'}}>—</span>
+                          }
+                        </div>
+                        <div style={{padding:'10px 14px'}}>
+                          <div style={{fontSize:9,fontWeight:700,color:'rgba(90,82,72,.4)',textTransform:'uppercase',letterSpacing:1,fontFamily:'Syne,sans-serif',marginBottom:5}}>Link 2</div>
+                          {hasUrl2
+                            ?<><a href={link.url2} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'#1878c8',textDecoration:'none',display:'block',marginBottom:6,wordBreak:'break-all',lineHeight:1.5}}>{link.url2}</a>
+                              <div style={{display:'flex',gap:5}}>
+                                <a href={link.url2} target="_blank" rel="noopener noreferrer" style={{fontSize:10,padding:'4px 10px',borderRadius:6,background:'rgba(24,120,200,.1)',color:'#1878c8',border:'1px solid rgba(24,120,200,.2)',textDecoration:'none',fontWeight:600}}>Open →</a>
+                                <button onClick={()=>navigator.clipboard.writeText(link.url2).then(()=>{setCopied(prev=>({...prev,[`${vault.id}-${li}-2`]:true}));setTimeout(()=>setCopied(prev=>({...prev,[`${vault.id}-${li}-2`]:false})),2000)})}
+                                  style={{fontSize:10,padding:'4px 10px',borderRadius:6,background:copied[`${vault.id}-${li}-2`]?'rgba(30,160,120,.12)':'rgba(200,192,178,.15)',color:copied[`${vault.id}-${li}-2`]?'#1a9070':'rgba(90,82,72,.6)',border:'1px solid rgba(200,192,178,.3)',cursor:'pointer',fontWeight:600,fontFamily:'Syne,sans-serif',transition:'all .2s'}}>
+                                  {copied[`${vault.id}-${li}-2`]?'✓ Copied':'📋 Copy'}
+                                </button>
+                              </div>
+                            </>
+                            :<span style={{fontSize:11,color:'rgba(90,82,72,.25)',fontStyle:'italic'}}>—</span>
+                          }
+                        </div>
+                      </div>}
+                      {hasMsg&&<div style={{padding:'8px 14px',fontSize:11,color:'rgba(90,82,72,.7)',background:'rgba(194,105,42,.04)',lineHeight:1.6}}>💬 {link.message}</div>}
+                    </div>
+                  })}
+                </div>
+
+                {/* Add item */}
+                {addingLinkFor!==vault.id
+                  ?<button onClick={()=>{setAddingLinkFor(vault.id);setNewLinkName('');setNewLinkUrl('');setNewLinkUrl2('');setNewLinkMsg('')}}
+                    style={{fontSize:12,padding:'8px 18px',borderRadius:9,border:'1.5px dashed rgba(194,105,42,.5)',background:'transparent',color:'#c2692a',cursor:'pointer',fontFamily:'Syne,sans-serif',fontWeight:700}}>
+                    + Add Link / Message
+                  </button>
+                  :<div style={{padding:14,background:'rgba(194,105,42,.04)',borderRadius:11,border:'1px solid rgba(194,105,42,.2)',display:'flex',flexDirection:'column',gap:10}}>
+                    <div style={{fontSize:10,fontWeight:700,color:'#c2692a',fontFamily:'Syne,sans-serif',textTransform:'uppercase',letterSpacing:1}}>New Item</div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                      <div><label className="lbl">Name 1 *</label><input className="f-in" placeholder="e.g. Zoom Room" value={newLinkName} onChange={e=>setNewLinkName(e.target.value)}/></div>
+                      <div><label className="lbl">Name 2 (optional)</label><input className="f-in" placeholder="e.g. Chat Room" value={newLinkName2} onChange={e=>setNewLinkName2(e.target.value)}/></div>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                      <div><label className="lbl">Link 1 (optional)</label><input className="f-in" placeholder="https://..." value={newLinkUrl} onChange={e=>setNewLinkUrl(e.target.value)}/></div>
+                      <div><label className="lbl">Link 2 (optional)</label><input className="f-in" placeholder="https://..." value={newLinkUrl2} onChange={e=>setNewLinkUrl2(e.target.value)}/></div>
+                    </div>
+                    <div><label className="lbl">Message / Note (optional)</label><textarea className="f-in" rows={2} placeholder="Any message or instructions for users…" value={newLinkMsg} onChange={e=>setNewLinkMsg(e.target.value)} style={{resize:'vertical'}}/></div>
+                    <div style={{display:'flex',gap:8}}>
+                      <button onClick={()=>setAddingLinkFor(null)} style={{flex:1,padding:'9px',borderRadius:9,border:'1px solid rgba(200,192,178,.4)',background:'transparent',color:'rgba(90,82,72,.6)',fontSize:12,cursor:'pointer'}}>Cancel</button>
+                      <button onClick={()=>{if(!newLinkName.trim())return;onAddLink(vault.id,{name:newLinkName.trim(),name2:newLinkName2.trim(),url:newLinkUrl.trim(),url2:newLinkUrl2.trim(),message:newLinkMsg.trim()});setNewLinkName('');setNewLinkName2('');setNewLinkUrl('');setNewLinkUrl2('');setNewLinkMsg('');setAddingLinkFor(null)}}
+                        style={{flex:2,padding:'9px',borderRadius:9,border:'none',background:newLinkName?'#1a1714':'rgba(200,192,178,.3)',color:newLinkName?'#fff':'rgba(90,82,72,.4)',fontSize:12,fontWeight:700,cursor:newLinkName?'pointer':'not-allowed',fontFamily:'Syne,sans-serif',transition:'all .15s'}}>
+                        Save Item ✓
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          })}
+        </div>
+      </>}
+
     </div>
   </div>
 }
 
-// ─── Mini Cal ─────────────────────────────────────────────────────
 function MiniCal({year,month,bookings,profileId,onNav,onSelect,selectedDate}){
   const first=new Date(year,month,1),last=new Date(year,month+1,0),today=new Date()
   const cells=[];for(let i=0;i<first.getDay();i++)cells.push(null)
@@ -1052,10 +1498,7 @@ function TimeGrid({dates,bookings,profileId,onHourClick}){
   const sidebarRef=useRef()
   const todayStr=fmtDate(new Date()),now=new Date(),nowMins=now.getHours()*60+now.getMinutes()
   const ROW_H=64
-  useEffect(()=>{
-    if(scrollRef.current)scrollRef.current.scrollTop=8*ROW_H
-  },[])
-  // Sync left time labels with right scroll
+  useEffect(()=>{if(scrollRef.current)scrollRef.current.scrollTop=8*ROW_H},[])
   useEffect(()=>{
     const el=scrollRef.current
     if(!el)return
@@ -1116,6 +1559,7 @@ export default function App(){
   const[bookings,setBookings]=useState([])
   const[profiles,setProfiles]=useState(DEFAULT_PROFILES)
   const[notices,setNotices]=useState([])
+  const[vaults,setVaults]=useState([])
   const[profilesLoaded,setProfilesLoaded]=useState(false)
   const[loading,setLoading]=useState(true)
   const[saving,setSaving]=useState(false)
@@ -1140,38 +1584,38 @@ export default function App(){
   const[toast,setToast]=useState(null)
   const[searchQ,setSearchQ]=useState('')
   const[selectedTZ,setSelectedTZ]=useState('Asia/Kolkata')
+  const[showLinks,setShowLinks]=useState(false)
   const pendingDay=useRef(null);const pendingHour=useRef(null);const pendingProf=useRef(null)
 
   useEffect(()=>{if(!profileId&&profiles.length)setProfileId(profiles[0].id)},[profiles])
 
-  // ── Real-time subscriptions (FREE via Supabase websockets) ────────
   useEffect(()=>{
-    fetchAll()
-    // Live bookings
-    const bookSub=supabase.channel('bookings-live').on('postgres_changes',{event:'*',schema:'public',table:'bookings'},()=>{fetchAll()}).subscribe()
-    // Live notices
-    const noticeSub=supabase.channel('notices-live').on('postgres_changes',{event:'*',schema:'public',table:'notices'},()=>{fetchNotices()}).subscribe()
-    // Live profiles
-    const profSub=supabase.channel('profiles-live').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>{fetchProfiles()}).subscribe()
-    return()=>{bookSub.unsubscribe();noticeSub.unsubscribe();profSub.unsubscribe()}
+    doFetchAll()
+    const bookSub=supabase.channel('bookings-live').on('postgres_changes',{event:'*',schema:'public',table:'bookings'},()=>doFetchAll()).subscribe()
+    const noticeSub=supabase.channel('notices-live').on('postgres_changes',{event:'*',schema:'public',table:'notices'},()=>fetchNotices()).subscribe()
+    const profSub=supabase.channel('profiles-live').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>fetchProfiles()).subscribe()
+    const vaultSub=supabase.channel('vaults-live').on('postgres_changes',{event:'*',schema:'public',table:'link_vaults'},()=>fetchVaults()).subscribe()
+    return()=>{bookSub.unsubscribe();noticeSub.unsubscribe();profSub.unsubscribe();vaultSub.unsubscribe()}
   },[])
 
-  async function fetchAll(){setLoading(true);await Promise.all([fetchProfiles(),fetchBookings(),fetchNotices()]);setLoading(false)}
+  async function doFetchAll(){setLoading(true);await Promise.all([fetchProfiles(),fetchBookings(),fetchNotices(),fetchVaults()]);setLoading(false)}
 
   async function fetchProfiles(){
     const{data,error}=await supabase.from('profiles').select('*').order('created_at',{ascending:true})
     if(!error&&data&&data.length>0){setProfiles(data.map(r=>({id:r.id,name:r.name,role:r.role||r.name})));setProfilesLoaded(true)}
     else if(!profilesLoaded){const seeds=DEFAULT_PROFILES.map(p=>({id:p.id,name:p.name,role:p.role}));await supabase.from('profiles').upsert(seeds);setProfilesLoaded(true)}
   }
-
   async function fetchBookings(){
     const{data,error}=await supabase.from('bookings').select('*').order('created_at',{ascending:false})
     if(!error)setBookings((data||[]).map(r=>({id:r.id,date:r.date,startTime:r.start_time,endTime:r.end_time,type:r.type,title:r.title,desc:r.description,bookedBy:r.booked_by,userPhone:r.user_phone||'',profileId:r.profile_id,status:r.status||'pending',createdAt:r.created_at})))
   }
-
   async function fetchNotices(){
     const{data,error}=await supabase.from('notices').select('*').order('created_at',{ascending:false})
     if(!error)setNotices(data||[])
+  }
+  async function fetchVaults(){
+    const{data,error}=await supabase.from('link_vaults').select('*').order('created_at',{ascending:true})
+    if(!error)setVaults((data||[]).map(r=>({...r,links:typeof r.links==='string'?JSON.parse(r.links||'[]'):r.links||[]})))
   }
 
   async function saveBooking(b){
@@ -1179,17 +1623,11 @@ export default function App(){
     setBookings(prev=>[{...b,createdAt:new Date().toISOString()},...prev])
     const{error}=await supabase.from('bookings').insert([{id:b.id,date:b.date,start_time:b.startTime,end_time:b.endTime,type:b.type,title:b.title,description:b.desc,booked_by:b.bookedBy,user_phone:b.userPhone||'',profile_id:b.profileId,status:'pending'}])
     setSaving(false)
-    if(error){setBookings(prev=>prev.filter(x=>x.id!==b.id));setToast({msg:`Error saving booking.`,type:'pending'})}
+    if(error){setBookings(prev=>prev.filter(x=>x.id!==b.id));setToast({msg:'Error saving booking.',type:'pending'})}
     else setToast({msg:`Booking submitted for ${profiles.find(p=>p.id===b.profileId)?.name||''}. Awaiting admin approval.`,type:'pending'})
   }
-  async function approveBooking(id){
-    setBookings(prev=>prev.map(b=>b.id===id?{...b,status:'approved'}:b))
-    await supabase.from('bookings').update({status:'approved'}).eq('id',id)
-  }
-  async function rejectBooking(id){
-    setBookings(prev=>prev.map(b=>b.id===id?{...b,status:'rejected'}:b))
-    await supabase.from('bookings').update({status:'rejected'}).eq('id',id)
-  }
+  async function approveBooking(id){setBookings(prev=>prev.map(b=>b.id===id?{...b,status:'approved'}:b));await supabase.from('bookings').update({status:'approved'}).eq('id',id)}
+  async function rejectBooking(id){setBookings(prev=>prev.map(b=>b.id===id?{...b,status:'rejected'}:b));await supabase.from('bookings').update({status:'rejected'}).eq('id',id)}
   async function deleteBooking(id){if(!window.confirm('Delete?'))return;setDeleting(id);setBookings(prev=>prev.filter(b=>b.id!==id));await supabase.from('bookings').delete().eq('id',id);setDeleting(null)}
   async function cancelBooking(id){setBookings(prev=>prev.filter(b=>b.id!==id));await supabase.from('bookings').delete().eq('id',id);setCancelMod(null);setToast({msg:'Your booking has been cancelled.',type:'success'})}
 
@@ -1206,19 +1644,39 @@ export default function App(){
     if(error){setProfiles(prev=>[...prev,prof]);setToast({msg:`Error: ${error.message}`,type:'pending'})}
     else setToast({msg:`Profile "${prof?.name}" permanently deleted.`,type:'success'})
   }
-
   async function saveNotice(n){
     if(n.createdAt&&notices.find(x=>x.id===n.id)){
       setNotices(prev=>prev.map(x=>x.id===n.id?{...x,active:n.active}:x))
       await supabase.from('notices').update({active:n.active}).eq('id',n.id)
-    } else {
+    }else{
       setNotices(prev=>[n,...prev])
       await supabase.from('notices').insert([{id:n.id,title:n.title,message:n.message,active:n.active!==false}])
     }
   }
-  async function deleteNotice(id){
-    setNotices(prev=>prev.filter(n=>n.id!==id))
-    await supabase.from('notices').delete().eq('id',id)
+  async function deleteNotice(id){setNotices(prev=>prev.filter(n=>n.id!==id));await supabase.from('notices').delete().eq('id',id)}
+
+  async function addVault(v){
+    setVaults(prev=>[...prev,v])
+    await supabase.from('link_vaults').insert([{id:v.id,name:v.name,passcode:v.passcode,color:v.color,links:[]}])
+  }
+  async function deleteVault(id){setVaults(prev=>prev.filter(v=>v.id!==id));await supabase.from('link_vaults').delete().eq('id',id)}
+  async function addLink(vaultId,link){
+    const vault=vaults.find(v=>v.id===vaultId);if(!vault)return
+    const newLinks=[...(vault.links||[]),link]
+    setVaults(prev=>prev.map(v=>v.id===vaultId?{...v,links:newLinks}:v))
+    await supabase.from('link_vaults').update({links:newLinks}).eq('id',vaultId)
+  }
+  async function editLink(vaultId,linkIdx,updatedLink){
+    const vault=vaults.find(v=>v.id===vaultId);if(!vault)return
+    const newLinks=(vault.links||[]).map((l,i)=>i===linkIdx?updatedLink:l)
+    setVaults(prev=>prev.map(v=>v.id===vaultId?{...v,links:newLinks}:v))
+    await supabase.from('link_vaults').update({links:newLinks}).eq('id',vaultId)
+  }
+  async function deleteLink(vaultId,linkIdx){
+    const vault=vaults.find(v=>v.id===vaultId);if(!vault)return
+    const newLinks=(vault.links||[]).filter((_,i)=>i!==linkIdx)
+    setVaults(prev=>prev.map(v=>v.id===vaultId?{...v,links:newLinks}:v))
+    await supabase.from('link_vaults').update({links:newLinks}).eq('id',vaultId)
   }
 
   function handleBook(ds,hour){
@@ -1232,21 +1690,17 @@ export default function App(){
   }
   function onDayClick(ds,date){setDayMod({ds,date})}
   function bookFromDay(ds){setDayMod(null);if(!userName){pendingDay.current=ds;pendingProf.current=profileId;setShowName(true)}else setBookMod({prefillDate:ds,profileId})}
-
   function changeMonth(d){let m=calMonth+d,y=calYear;if(m>11){m=0;y++}else if(m<0){m=11;y--};setCalMonth(m);setCalYear(y);setMiniMonth(m);setMiniYear(y);setViewDate(new Date(y,m,1))}
   function changeWeek(d){const nd=addDays(viewDate,d*7);setViewDate(nd);setCalYear(nd.getFullYear());setCalMonth(nd.getMonth())}
   function changeDay(d){const nd=addDays(viewDate,d);setViewDate(nd);setCalYear(nd.getFullYear());setCalMonth(nd.getMonth())}
   function goToday(){setViewDate(today);setCalYear(today.getFullYear());setCalMonth(today.getMonth());setMiniYear(today.getFullYear());setMiniMonth(today.getMonth())}
 
-  // Save theme to localStorage
   useEffect(()=>{localStorage.setItem('slotbook-theme',theme)},[theme])
   const themeVars=THEMES[theme]||THEMES.default
-
   const curProfile=profiles.find(p=>p.id===profileId)
   const weekStart=startOfWeek(viewDate)
   const weekDates=Array.from({length:7},(_,i)=>addDays(weekStart,i))
   const dayDates=[viewDate]
-
   let navTitle='',navSub=''
   if(viewMode==='month'){navTitle=`${MONTHS[calMonth]}`;navSub=`${calYear}`}
   else if(viewMode==='week'){const ws=weekDates[0],we=weekDates[6];navTitle=`${MONTHS[ws.getMonth()].slice(0,3)} ${ws.getDate()} – ${ws.getMonth()!==we.getMonth()?MONTHS[we.getMonth()].slice(0,3)+' ':''}`;navSub=`${we.getDate()}, ${we.getFullYear()}`}
@@ -1255,7 +1709,15 @@ export default function App(){
   if(screen==='admin')return<>
     <div className="orb orb1"/><div className="orb orb2"/><div className="orb orb3"/>
     {toast&&<Toast {...toast} onClose={()=>setToast(null)}/>}
-    <AdminPanel bookings={bookings} profiles={profiles} notices={notices} onDelete={deleteBooking} onApprove={approveBooking} onReject={rejectBooking} onClose={()=>setScreen('user')} deleting={deleting} onAddProfile={addProfile} onDeleteProfile={deleteProfile} onSaveNotice={saveNotice} onDeleteNotice={deleteNotice}/>
+    <AdminPanel
+      bookings={bookings} profiles={profiles} notices={notices}
+      onDelete={deleteBooking} onApprove={approveBooking} onReject={rejectBooking}
+      onClose={()=>setScreen('user')} deleting={deleting}
+      onAddProfile={addProfile} onDeleteProfile={deleteProfile}
+      onSaveNotice={saveNotice} onDeleteNotice={deleteNotice}
+      vaults={vaults} onAddVault={addVault} onDeleteVault={deleteVault}
+      onAddLink={addLink} onEditLink={editLink} onDeleteLink={deleteLink}
+    />
   </>
 
   return<>
@@ -1267,26 +1729,18 @@ export default function App(){
     {cancelMod&&<CancelModal booking={cancelMod} userName={userName} profiles={profiles} onCancel={cancelBooking} onClose={()=>setCancelMod(null)}/>}
     {noticeDetail&&<NoticeModal notice={noticeDetail} onClose={()=>setNoticeDetail(null)}/>}
     {adminLogin&&<AdminLogin onLogin={()=>{setAdminLogin(false);setScreen('admin')}} onBack={()=>setAdminLogin(false)}/>}
+    {showLinks&&<LinksPage
+      vaults={vaults} onClose={()=>setShowLinks(false)} isAdmin={screen==='admin'}
+      onAddVault={addVault} onDeleteVault={deleteVault}
+      onAddLink={addLink} onEditLink={editLink} onDeleteLink={deleteLink}
+    />}
 
     <div style={{display:'flex',flexDirection:'column',minHeight:'100%',background:themeVars['--t-bg'],position:'relative',zIndex:1,...Object.fromEntries(Object.entries(themeVars).filter(([k])=>k.startsWith('--')))}}>
-      {/* ── Header ── */}
+      {/* Header */}
       <header className="main-header">
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <div style={{width:32,height:32,borderRadius:10,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.2)'}}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/>
-              <circle cx="12" cy="3.2" r="0.8" fill="#c2692a" opacity="0.5"/>
-              <circle cx="12" cy="20.8" r="0.8" fill="#c2692a" opacity="0.5"/>
-              <circle cx="3.2" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/>
-              <circle cx="20.8" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/>
-              <circle cx="6.1" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/>
-              <circle cx="17.9" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/>
-              <circle cx="6.1" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/>
-              <circle cx="17.9" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/>
-              <line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/>
-              <line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/>
-              <circle cx="12" cy="12" r="1.6" fill="#c2692a"/>
-            </svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/><circle cx="12" cy="3.2" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="12" cy="20.8" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="3.2" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="20.8" cy="12" r="0.8" fill="#c2692a" opacity="0.5"/><circle cx="6.1" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/><circle cx="17.9" cy="6.1" r="0.5" fill="#c2692a" opacity="0.3"/><circle cx="6.1" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/><circle cx="17.9" cy="17.9" r="0.5" fill="#c2692a" opacity="0.3"/><line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/><line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/><circle cx="12" cy="12" r="1.6" fill="#c2692a"/></svg>
           </div>
           <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.35rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.4px'}}>SlotBook</span>
         </div>
@@ -1299,20 +1753,20 @@ export default function App(){
           {userName&&<div style={{display:'flex',background:'rgba(255,255,255,.72)',border:'1px solid rgba(200,192,178,.4)',borderRadius:20,padding:'4px 10px 4px 6px',fontSize:12,color:'rgba(90,82,72,.78)',alignItems:'center',gap:6}}>
             <Avatar name={userName} size={20}/>
           </div>}
-          <div style={{display:'flex',alignItems:'center',border:'1px solid rgba(200,192,178,.45)',borderRadius:11,overflow:'hidden',background:'rgba(255,255,255,.75)'}}>
-            <button className="btn-dark" onClick={()=>handleBook(fmtDate(viewDate),null)} style={{padding:'9px 18px',borderRadius:11,fontSize:13,display:'flex',alignItems:'center',gap:7,height:'100%'}}>
-              + Book Slot <span style={{animation:'arrBounce 1.4s ease infinite',display:'inline-block'}}>→</span>
-            </button>
-          </div>
+          <button className="btn-dark" onClick={()=>handleBook(fmtDate(viewDate),null)} style={{padding:'9px 18px',borderRadius:11,fontSize:13,display:'flex',alignItems:'center',gap:7}}>
+            + Book Slot <span style={{animation:'arrBounce 1.4s ease infinite',display:'inline-block'}}>→</span>
+          </button>
+          <button onClick={()=>setShowLinks(true)} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'rgba(255,255,255,.85)',border:'1px solid rgba(200,192,178,.45)',borderRadius:9,cursor:'pointer',fontFamily:'Syne,sans-serif',fontSize:11,fontWeight:700,color:'#1a1714',transition:'all .2s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(194,105,42,.08)'} onMouseOut={e=>e.currentTarget.style.background='rgba(255,255,255,.85)'}>
+            🔗 Links
+          </button>
           <button className="btn-soft" onClick={()=>setAdminLogin(true)} style={{padding:'8px 14px',borderRadius:9,fontSize:11}}>Admin</button>
         </div>
       </header>
 
-      {/* ── Scrolling Notice Banner ── */}
       <NoticeBanner notices={notices} onClickNotice={n=>setNoticeDetail(n)}/>
 
       <div style={{display:'flex',flex:1,overflow:'hidden'}}>
-        {/* ── Sidebar ── */}
+        {/* Sidebar */}
         <aside className="sidebar">
           {curProfile&&<div style={{background:'linear-gradient(135deg,rgba(194,105,42,.08),rgba(30,160,120,.05))',border:'1px solid rgba(194,105,42,.18)',borderRadius:12,padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
             <Avatar name={curProfile.name} size={38}/>
@@ -1322,7 +1776,6 @@ export default function App(){
           <MiniCal year={miniYear} month={miniMonth} bookings={bookings} profileId={profileId} selectedDate={fmtDate(viewDate)}
             onNav={d=>{let m=miniMonth+d,y=miniYear;if(m>11){m=0;y++}else if(m<0){m=11;y--}setMiniMonth(m);setMiniYear(y)}}
             onSelect={d=>{setViewDate(d);setCalYear(d.getFullYear());setCalMonth(d.getMonth())}}/>
-          {/* Timezone selector */}
           <div>
             <div style={{fontSize:9,color:'rgba(90,82,72,.38)',textTransform:'uppercase',letterSpacing:1,marginBottom:8,fontWeight:700,fontFamily:'Syne,sans-serif'}}>Your Timezone</div>
             <select value={selectedTZ} onChange={e=>setSelectedTZ(e.target.value)} className="f-in" style={{fontSize:11,padding:'7px 10px'}}>
@@ -1343,9 +1796,8 @@ export default function App(){
           </div>
         </aside>
 
-        {/* ── Main ── */}
+        {/* Main */}
         <main style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',padding:'1.25rem 1.5rem'}}>
-          {/* Toolbar */}
           <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:'1rem',flexWrap:'wrap',flexShrink:0}}>
             <button className="btn-soft" onClick={goToday} style={{padding:'8px 16px',borderRadius:8,fontSize:12,fontWeight:600}}>Today</button>
             <div style={{display:'flex',gap:5}}>
@@ -1359,16 +1811,12 @@ export default function App(){
               {[['day','Day'],['week','Week'],['month','Month']].map(([k,lbl])=><button key={k} onClick={()=>setViewMode(k)} style={{padding:'7px 14px',border:'none',fontFamily:'DM Sans,sans-serif',fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .2s',background:viewMode===k?'#1a1714':'transparent',color:viewMode===k?'#f5f4f0':'rgba(90,82,72,.7)'}}>{lbl}</button>)}
             </div>
           </div>
-
-          {/* Profile switcher row */}
           <div style={{display:'flex',gap:6,marginBottom:'1rem',flexShrink:0,overflowX:'auto',paddingBottom:4}}>
             {profiles.map(p=><button key={p.id} onClick={()=>setProfileId(p.id)} title={p.name} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px 5px 6px',borderRadius:20,cursor:'pointer',border:p.id===profileId?'2px solid #c2692a':'2px solid transparent',background:p.id===profileId?'rgba(194,105,42,.08)':'rgba(255,255,255,.7)',transition:'all .15s',whiteSpace:'nowrap',flexShrink:0}}>
               <Avatar name={p.name} size={22}/>
               <span style={{fontSize:11,fontWeight:600,color:p.id===profileId?'#c2692a':'rgba(90,82,72,.7)',fontFamily:'Syne,sans-serif'}}>{p.name}</span>
             </button>)}
           </div>
-
-          {/* Calendar */}
           {loading?<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:300,gap:12,color:'rgba(90,82,72,.5)',fontSize:14}}><span className="spinner"/> Loading…</div>
           :viewMode==='month'?<div style={{flex:1,overflowY:'auto'}}><MonthView year={calYear} month={calMonth} bookings={bookings} profileId={profileId} onDayClick={onDayClick} searchHighlight={searchQ}/></div>
           :<div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}><TimeGrid dates={viewMode==='week'?weekDates:dayDates} bookings={bookings} profileId={profileId} onHourClick={(ds,h,d)=>handleBook(ds,h)}/></div>}
