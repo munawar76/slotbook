@@ -6,9 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mobile:sync": "vite build && npx cap sync android",
+    "mobile:android": "vite build && npx cap sync android && npx cap open android",
+    "mobile:apk": "vite build && npx cap sync android && cd android && gradlew assembleDebug",
+    "mobile:apk:release": "vite build && npx cap sync android && cd android && gradlew assembleRelease",
+    "mobile:ios": "vite build && npx cap sync ios && npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.2",
+    "@capacitor/cli": "^8.3.2",
+    "@capacitor/core": "^8.3.2",
+    "@capacitor/ios": "^8.3.2",
     "@supabase/supabase-js": "^2.39.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

@@ -141,3 +141,109 @@ html,body,#root{height:100%;font-family:'DM Sans',sans-serif;background:var(--t-
   .adm-tbl{font-size:11px}
   .adm-tbl th,.adm-tbl td{padding:8px}
 }
+
+/* ══════════════════════════════════════
+   MOBILE / CAPACITOR RESPONSIVE STYLES
+══════════════════════════════════════ */
+@media(max-width:480px){
+  /* Root & body */
+  html,body,#root{
+    overflow-x:hidden;
+    min-height:100dvh;
+    height:100dvh;
+  }
+
+  /* Header: tighter on small screens */
+  .main-header{
+    height:54px;
+    padding:0 .75rem;
+    gap:.5rem;
+  }
+  .main-header h1,.main-header .logo-text{
+    font-size:15px !important;
+  }
+
+  /* Overlay / Modal: full-screen on mobile */
+  .overlay{
+    padding:0;
+    align-items:flex-end;
+  }
+  .overlay .card{
+    border-radius:20px 20px 0 0;
+    max-height:92dvh;
+    overflow-y:auto;
+    width:100%;
+    padding:1.2rem 1rem 2rem;
+  }
+
+  /* Calendar cells: compact */
+  .cal-cell{
+    min-height:58px;
+    padding:5px 4px 4px;
+  }
+  .cell-num{font-size:11px}
+  .cell-num.is-today{width:22px;height:22px;font-size:11px}
+  .ev-pill{
+    font-size:9px;
+    padding:2px 4px;
+    border-radius:4px;
+    gap:2px;
+  }
+  .ev-pill .ev-time{display:none}
+  .more-link{font-size:9px}
+
+  /* Calendar DOW labels */
+  .cal-dow{
+    font-size:9px;
+    padding:7px 0;
+    letter-spacing:.6px;
+  }
+
+  /* Tables: horizontal scroll */
+  .adm-tbl-wrap{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .adm-tbl{font-size:11px;min-width:560px}
+  .adm-tbl th,.adm-tbl td{padding:8px 10px}
+
+  /* Buttons: larger tap targets */
+  .btn-dark,.btn-soft{
+    min-height:42px;
+    font-size:13px;
+  }
+  .btn-del{min-height:36px}
+
+  /* Inputs: prevent iOS zoom (font-size must be >=16px) */
+  .f-in{font-size:16px !important;min-height:46px}
+  .t-box{font-size:20px;width:54px;min-height:46px}
+
+  /* Toast: full-width at bottom */
+  .toast-wrap{
+    top:auto;
+    bottom:calc(env(safe-area-inset-bottom) + 12px);
+    right:12px;
+    left:12px;
+    max-width:100%;
+  }
+
+  /* Stat cards: 2-column grid */
+  .stat-card{padding:.75rem 1rem}
+
+  /* Orbs: smaller on mobile */
+  .orb1{width:320px;height:320px;top:-100px;left:-80px}
+  .orb2{width:260px;height:260px;bottom:-80px;right:-60px}
+  .orb3{width:200px;height:200px}
+}
+
+/* Touch-friendly scroll areas */
+@media(max-width:700px){
+  .cal-body,.overlay .card,[data-scroll]{
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+  }
+  /* Prevent double-tap zoom on buttons */
+  button,a,[role=button]{
+    touch-action:manipulation;
+  }
+}
