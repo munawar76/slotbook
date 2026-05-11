@@ -498,6 +498,7 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
   const[end,setEnd]=useState(prefillHour!=null?to24(String(prefillHour>11?prefillHour-11:prefillHour+1),'00',prefillHour>=11?'PM':'AM'):'00:00')
   const[type,setType]=useState('interview')
   const[title,setTitle]=useState('')
+  const[rounds,setRounds]=useState('')
   const[desc,setDesc]=useState('')
   const profile=profiles.find(p=>p.id===profileId)
   const profB=bookings.filter(b=>b.profileId===profileId&&(b.status||'pending')!=='rejected')
@@ -511,7 +512,7 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
   const m=TC[type]
   function submit(){
     if(!canBook||saving)return
-    onBook({id:uid(),date,startTime:istStart,endTime:istEnd,type,title:title.trim(),desc:desc.trim(),bookedBy:userName,userPhone:userPhone||'',profileId,status:'pending'})
+    onBook({id:uid(),date,startTime:istStart,endTime:istEnd,type,title:title.trim(),rounds:rounds.trim(),desc:desc.trim(),bookedBy:userName,userPhone:userPhone||'',profileId,status:'pending'})
   }
   return<div className="overlay open" onClick={e=>e.target===e.currentTarget&&onClose()}>
     <div className="card" style={{width:'100%',maxWidth:520,overflow:'hidden',display:'flex',flexDirection:'column',maxHeight:'92vh',animation:'scaleIn .28s ease both'}}>
@@ -554,8 +555,12 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
           </div>
         </div>
         <div>
-          <label className="lbl">Title</label>
+          <label className="lbl">Company Name / Rounds</label>
           <input className="f-in" placeholder="Company (specify rounds 1, 2, Client, etc.)" value={title} onChange={e=>setTitle(e.target.value)}/>
+        </div>
+        <div>
+          <label className="lbl">Rounds <span style={{fontStyle:'italic',textTransform:'none',letterSpacing:0,color:'rgba(90,82,72,.3)',fontWeight:400}}>(optional)</span></label>
+          <textarea className="f-in" rows={3} style={{resize:'vertical'}} placeholder="Round 1, Round 2, Client…" value={rounds} onChange={e=>setRounds(e.target.value)}/>
         </div>
         <div>
           <label className="lbl">Description <span style={{fontStyle:'italic',textTransform:'none',letterSpacing:0,color:'rgba(90,82,72,.3)',fontWeight:400}}>(optional)</span></label>
@@ -1141,7 +1146,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
         <div className="card" style={{overflow:'hidden',padding:0}}>
           <div style={{overflowX:'auto'}}>
             <table className="adm-tbl">
-              <thead><tr><th>Status</th><th>Profile</th><th>Booked By</th><th>Phone</th><th>Title</th><th>Date</th><th>Day</th><th>Start (IST)</th><th>End (IST)</th><th>Type</th><th>Description</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Status</th><th>Profile</th><th>Booked By</th><th>Phone</th><th>Title</th><th>Date</th><th>Day</th><th>Start (IST)</th><th>End (IST)</th><th>Type</th><th>Rounds</th><th>Actions</th></tr></thead>
               <tbody>
                 {filtered.length===0?<tr><td colSpan={12} style={{textAlign:'center',padding:'3rem',color:'rgba(90,82,72,.28)'}}><div style={{fontSize:28,marginBottom:8,opacity:.2}}>◇</div><p style={{fontSize:13}}>No bookings found.</p></td></tr>
                 :filtered.map((b,i)=>{
@@ -1158,11 +1163,8 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
                     <td style={{fontWeight:700,color:m.color,fontFamily:'Syne,sans-serif',whiteSpace:'nowrap'}}>{dTime(b.startTime)}</td>
                     <td style={{fontWeight:700,color:m.color,fontFamily:'Syne,sans-serif',whiteSpace:'nowrap'}}>{dTime(b.endTime)}</td>
                     <td><span className="tag" style={{background:m.bg,color:m.color,border:`1px solid ${m.border}`}}>{b.type}</span></td>
-                    <td style={{maxWidth:130,cursor:b.desc?'pointer':'default'}} onClick={()=>b.desc&&setDescModal(b)} title={b.desc?'Click to read full description':''}>
-                      {b.desc?<span style={{display:'flex',alignItems:'center',gap:5,fontSize:12,color:'#1878c8',fontWeight:500}}>
-                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}}>{b.desc.slice(0,30)}{b.desc.length>30?'…':''}</span>
-                        <span style={{fontSize:10,opacity:.7,flexShrink:0}}>↗</span>
-                      </span>:<span style={{color:'rgba(90,82,72,.35)',fontSize:12}}>—</span>}
+                    <td style={{maxWidth:130}}>
+                      {b.rounds?<span style={{fontSize:12,color:'#1a1714',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block',maxWidth:120}}>{b.rounds}</span>:<span style={{color:'rgba(90,82,72,.35)',fontSize:12}}>—</span>}
                     </td>
                     <td><div style={{display:'flex',gap:5,alignItems:'center'}}>
                       {isPending&&<>
@@ -1607,7 +1609,7 @@ export default function App(){
   }
   async function fetchBookings(){
     const{data,error}=await supabase.from('bookings').select('*').order('created_at',{ascending:false})
-    if(!error)setBookings((data||[]).map(r=>({id:r.id,date:r.date,startTime:r.start_time,endTime:r.end_time,type:r.type,title:r.title,desc:r.description,bookedBy:r.booked_by,userPhone:r.user_phone||'',profileId:r.profile_id,status:r.status||'pending',createdAt:r.created_at})))
+    if(!error)setBookings((data||[]).map(r=>({id:r.id,date:r.date,startTime:r.start_time,endTime:r.end_time,type:r.type,title:r.title,rounds:r.rounds||'',desc:r.description,bookedBy:r.booked_by,userPhone:r.user_phone||'',profileId:r.profile_id,status:r.status||'pending',createdAt:r.created_at})))
   }
   async function fetchNotices(){
     const{data,error}=await supabase.from('notices').select('*').order('created_at',{ascending:false})
@@ -1621,7 +1623,7 @@ export default function App(){
   async function saveBooking(b){
     setSaving(true)
     setBookings(prev=>[{...b,createdAt:new Date().toISOString()},...prev])
-    const{error}=await supabase.from('bookings').insert([{id:b.id,date:b.date,start_time:b.startTime,end_time:b.endTime,type:b.type,title:b.title,description:b.desc,booked_by:b.bookedBy,user_phone:b.userPhone||'',profile_id:b.profileId,status:'pending'}])
+    const{error}=await supabase.from('bookings').insert([{id:b.id,date:b.date,start_time:b.startTime,end_time:b.endTime,type:b.type,title:b.title,rounds:b.rounds||'',description:b.desc,booked_by:b.bookedBy,user_phone:b.userPhone||'',profile_id:b.profileId,status:'pending'}])
     setSaving(false)
     if(error){setBookings(prev=>prev.filter(x=>x.id!==b.id));setToast({msg:'Error saving booking.',type:'pending'})}
     else setToast({msg:`Booking submitted for ${profiles.find(p=>p.id===b.profileId)?.name||''}. Awaiting admin approval.`,type:'pending'})
