@@ -54,6 +54,24 @@ html,body,#root{height:100%;font-family:'DM Sans',sans-serif;background:var(--t-
 .btn-del{background:transparent;border:1px solid transparent;color:rgba(185,50,40,.72);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px;padding:4px 10px;border-radius:6px;transition:all .15s;white-space:nowrap}
 .btn-del:hover{border-color:rgba(185,50,40,.35);background:rgba(210,55,40,.07)}
 
+/* ── Kebab three-dot menu ── */
+@keyframes greenOutlineFlash{
+  0%  {background:rgba(30,160,120,0);box-shadow:0 0 0 0 rgba(30,160,120,0);}
+  18% {background:rgba(30,160,120,.13);box-shadow:0 0 0 3px rgba(30,160,120,.55),inset 0 0 24px rgba(30,160,120,.07);}
+  55% {background:rgba(30,160,120,.07);box-shadow:0 0 0 9px rgba(30,160,120,.17);}
+  100%{background:rgba(30,160,120,.03);box-shadow:0 0 0 20px rgba(30,160,120,0);}
+}
+.row-complete-flash{animation:greenOutlineFlash 1.5s cubic-bezier(0.22,1,0.36,1) forwards;}
+.kebab-btn{background:transparent;border:none;color:rgba(90,82,72,.38);cursor:pointer;padding:4px 8px;border-radius:7px;font-size:18px;line-height:1;transition:all .15s;letter-spacing:1px;}
+.kebab-btn:hover{background:rgba(200,192,178,.2);color:rgba(90,82,72,.8);}
+.kebab-drop{position:fixed;background:rgba(255,255,255,.98);border:1px solid rgba(200,192,178,.42);border-radius:13px;box-shadow:0 10px 36px rgba(40,30,20,.15),0 2px 8px rgba(40,30,20,.07);z-index:9999;min-width:172px;padding:5px;animation:scaleIn .16s cubic-bezier(0.22,1,0.36,1);backdrop-filter:blur(20px);}
+.kebab-item{display:flex;align-items:center;gap:9px;width:100%;padding:9px 13px;background:transparent;border:none;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#1a1714;transition:all .12s;text-align:left;white-space:nowrap;}
+.kebab-item:hover{background:rgba(200,192,178,.17);}
+.kebab-item.kgreen{color:#1a9070;}.kebab-item.kgreen:hover{background:rgba(30,160,120,.1);}
+.kebab-item.kblue{color:#1a6ebf;}.kebab-item.kblue:hover{background:rgba(26,110,191,.08);}
+.kebab-item.korange{color:#c2692a;}.kebab-item.korange:hover{background:rgba(194,105,42,.08);}
+.kebab-sep{height:1px;background:rgba(200,192,178,.32);margin:4px 6px;}
+
 /* ── Inputs ── */
 .f-in{width:100%;padding:11px 14px;border-radius:10px;background:rgba(255,255,255,.9);border:1.5px solid rgba(200,192,178,.46);color:var(--t-text,#1a1714);font-family:'DM Sans',sans-serif;font-size:14px;transition:all .2s}
 .f-in:focus{outline:none;border-color:color-mix(in srgb,var(--t-accent,#c2692a) 48%,transparent);background:#fff;box-shadow:0 0 0 3px color-mix(in srgb,var(--t-accent,#c2692a) 10%,transparent)}

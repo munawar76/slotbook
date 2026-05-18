@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase, ADMIN_USER, ADMIN_PASS } from './supabase'
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -204,9 +205,10 @@ function Avatar({name,size=28,style={}}){
 // ─── Status Badge ─────────────────────────────────────────────────
 function StatusBadge({status,small=false}){
   const cfg={
-    pending: {bg:'rgba(230,168,0,.12)',color:'#a07000',border:'rgba(230,168,0,.4)',label:'⏳ Pending'},
-    approved:{bg:'rgba(30,160,120,.1)', color:'#1a9070',border:'rgba(30,160,120,.3)',label:'✓ Approved'},
-    rejected:{bg:'#d63030',             color:'#fff',   border:'#b82828',           label:'✕ Declined',glow:true},
+    pending:  {bg:'rgba(230,168,0,.12)', color:'#a07000',border:'rgba(230,168,0,.4)', label:'⏳ Pending'},
+    approved: {bg:'rgba(30,160,120,.1)',  color:'#1a9070',border:'rgba(30,160,120,.3)',label:'✓ Approved'},
+    rejected: {bg:'#d63030',             color:'#fff',  border:'#b82828',            label:'✕ Declined',glow:true},
+    completed:{bg:'rgba(30,160,120,.18)',color:'#0f7a5a',border:'rgba(30,160,120,.5)',label:'● Completed'},
   }
   const s=cfg[status]||cfg.pending
   return<span style={{fontSize:small?9:10,padding:small?'2px 7px':'4px 10px',borderRadius:20,background:s.bg,color:s.color,border:`1px solid ${s.border}`,fontFamily:'Syne,sans-serif',fontWeight:700,textTransform:'uppercase',letterSpacing:'.6px',whiteSpace:'nowrap',boxShadow:s.glow?'0 2px 8px rgba(214,48,48,.35)':'none'}}>{s.label}</span>
@@ -1026,13 +1028,32 @@ function LinksPage({vaults,onClose,isAdmin,onAddVault,onDeleteVault,onAddLink,on
   )
 }
 
-function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClose,deleting,onAddProfile,onDeleteProfile,onSaveNotice,onDeleteNotice,vaults,onAddVault,onDeleteVault,onAddLink,onEditLink,onDeleteLink}){
+function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpdateBooking,onClose,deleting,onAddProfile,onDeleteProfile,onSaveNotice,onDeleteNotice,vaults,onAddVault,onDeleteVault,onAddLink,onEditLink,onDeleteLink}){
   const[tab,setTab]=useState('bookings')
   const[search,setSearch]=useState('');const[dateF,setDateF]=useState('');const[typeF,setTypeF]=useState('');const[profF,setProfF]=useState('');const[statusF,setStatusF]=useState('')
   const[newName,setNewName]=useState('');const[newRole,setNewRole]=useState('')
   const[noticeTitle,setNoticeTitle]=useState('');const[noticeMsg,setNoticeMsg]=useState('');const[noticeSaving,setNoticeSaving]=useState(false)
   const[adminTheme,setAdminTheme]=useState(()=>localStorage.getItem('slotbook-admin-theme')||'default')
   const[descModal,setDescModal]=useState(null)
+  // Kebab menu state
+  const[flashId,setFlashId]=useState(null)
+  const[openMenu,setOpenMenu]=useState(null)
+  const[menuPos,setMenuPos]=useState({top:0,left:0})
+  // Edit modal state
+  const[editMod,setEditMod]=useState(null)
+  const[editTitle,setEditTitle]=useState('')
+  const[editType,setEditType]=useState('interview')
+  const[editRounds,setEditRounds]=useState('')
+  const[editDesc,setEditDesc]=useState('')
+  // Reschedule modal state
+  const[reschedMod,setReschedMod]=useState(null)
+  const[reschedDate,setReschedDate]=useState('')
+  const[reschedSH,setReschedSH]=useState('9')
+  const[reschedSM,setReschedSM]=useState('00')
+  const[reschedSAP,setReschedSAP]=useState('AM')
+  const[reschedEH,setReschedEH]=useState('10')
+  const[reschedEM,setReschedEM]=useState('00')
+  const[reschedEAP,setReschedEAP]=useState('AM')
   // Vault form state
   const[newVaultName,setNewVaultName]=useState('')
   const[newVaultPin,setNewVaultPin]=useState('')
@@ -1075,8 +1096,154 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
     setEditingLink(null)
   }
 
+  // Kebab menu helpers
+  useEffect(()=>{
+    if(!openMenu)return
+    const h=e=>{if(!e.target.closest('.kebab-wrap')&&!e.target.closest('.kebab-drop'))setOpenMenu(null)}
+    document.addEventListener('mousedown',h)
+    return()=>document.removeEventListener('mousedown',h)
+  },[openMenu])
+
+  function toggleMenu(e,id){
+    if(openMenu===id){setOpenMenu(null);return}
+    const r=e.currentTarget.getBoundingClientRect()
+    const dropW=176,dropH=136
+    const left=Math.max(8,Math.min(r.right-dropW,window.innerWidth-dropW-8))
+    const top=r.bottom+dropH>window.innerHeight-8?r.top-dropH-4:r.bottom+4
+    setMenuPos({top,left})
+    setOpenMenu(id)
+  }
+  function markComplete(id){
+    const b=bookings.find(bk=>bk.id===id)
+    setOpenMenu(null)
+    if(b?.status==='completed'){
+      onUpdateBooking(id,{status:'approved'})
+    }else{
+      setFlashId(id)
+      onUpdateBooking(id,{status:'completed'})
+      setTimeout(()=>setFlashId(f=>f===id?null:f),1600)
+    }
+  }
+  function openEditMod(b){
+    setEditMod(b);setEditTitle(b.title);setEditType(b.type||'interview')
+    setEditRounds(b.rounds||'');setEditDesc(b.desc||'');setOpenMenu(null)
+  }
+  function saveEditMod(){
+    if(!editTitle.trim())return
+    onUpdateBooking(editMod.id,{title:editTitle.trim(),type:editType,rounds:editRounds.trim(),desc:editDesc.trim()})
+    setEditMod(null)
+  }
+  function openReschedMod(b){
+    setReschedMod(b);setReschedDate(b.date)
+    const s=to12(b.startTime);setReschedSH(s.h);setReschedSM(s.m);setReschedSAP(s.ap)
+    const e=to12(b.endTime);setReschedEH(e.h);setReschedEM(e.m);setReschedEAP(e.ap)
+    setOpenMenu(null)
+  }
+  function saveReschedMod(){
+    if(!reschedDate)return
+    onUpdateBooking(reschedMod.id,{date:reschedDate,startTime:to24(reschedSH,reschedSM,reschedSAP),endTime:to24(reschedEH,reschedEM,reschedEAP)})
+    setReschedMod(null)
+  }
+
+  // Portal dropdown — rendered on document.body to escape all overflow/clip ancestors
+  const kebabPortal=openMenu&&createPortal(
+    <div className="kebab-drop" style={{top:menuPos.top,left:menuPos.left}} onMouseDown={e=>e.stopPropagation()}>
+      {(()=>{const b=bookings.find(bk=>bk.id===openMenu);if(!b)return null;return<>
+        <button className="kebab-item kgreen" onClick={()=>markComplete(b.id)} style={b.status==='completed'?{color:'#777'}:{}}>
+          {b.status==='completed'
+            ?<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#777" strokeWidth="1.5"/><path d="M5 8h6" stroke="#777" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            :<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#1a9070" strokeWidth="1.5"/><path d="M4.5 8l2.5 2.5 4.5-5" stroke="#1a9070" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          {b.status==='completed'?'Undo Completed':'Mark Completed'}
+        </button>
+        <div className="kebab-sep"/>
+        <button className="kebab-item kblue" onClick={()=>openEditMod(b)}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="#1a6ebf" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+          Edit Details
+        </button>
+        <button className="kebab-item korange" onClick={()=>openReschedMod(b)}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3" width="13" height="11.5" rx="2" stroke="#c2692a" strokeWidth="1.4"/><path d="M5 1.5v3M11 1.5v3M1.5 7h13" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/></svg>
+          Reschedule
+        </button>
+      </>})()}
+    </div>,
+    document.body
+  )
+
   return<div style={{background:at?at.bg:'#f5f4f0',minHeight:'100%',display:'flex',flexDirection:'column',position:'relative',zIndex:1,color:at?at.text:'#1a1714',transition:'background .3s'}}>
+    {kebabPortal}
     {descModal&&<DescModal booking={descModal} profiles={profiles} onClose={()=>setDescModal(null)}/>}
+
+    {/* ── Edit Booking Modal ── */}
+    {editMod&&<div className="overlay open" onClick={e=>{if(e.target===e.currentTarget)setEditMod(null)}}>
+      <div className="card" style={{width:'100%',maxWidth:480,padding:'1.75rem',animation:'scaleIn .22s ease'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
+          <span style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:800,color:'#1a1714'}}>✏ Edit Interview Details</span>
+          <button onClick={()=>setEditMod(null)} style={{background:'transparent',border:'none',fontSize:18,cursor:'pointer',color:'rgba(90,82,72,.45)',lineHeight:1}}>✕</button>
+        </div>
+        <div style={{marginBottom:14,padding:'9px 13px',background:'rgba(194,105,42,.06)',borderRadius:10,fontSize:12,color:'rgba(90,82,72,.7)',fontWeight:600,fontFamily:'Syne,sans-serif'}}>
+          {editMod.bookedBy} · {dDate(editMod.date)}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div><label className="lbl">Title</label><input className="f-in" value={editTitle} onChange={e=>setEditTitle(e.target.value)} placeholder="Interview title…"/></div>
+          <div>
+            <label className="lbl">Type</label>
+            <div style={{display:'flex',gap:8}}>
+              {['interview','meeting','other'].map(t=><button key={t} onClick={()=>setEditType(t)} style={{flex:1,padding:'9px 6px',borderRadius:9,border:`1.5px solid ${editType===t?TC[t].border:'rgba(200,192,178,.42)'}`,background:editType===t?TC[t].bg:'rgba(255,255,255,.6)',color:editType===t?TC[t].color:'rgba(90,82,72,.52)',fontFamily:'DM Sans,sans-serif',fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .15s',textTransform:'capitalize'}}>{t}</button>)}
+            </div>
+          </div>
+          <div><label className="lbl">Rounds</label><input className="f-in" value={editRounds} onChange={e=>setEditRounds(e.target.value)} placeholder="e.g. L2 round, Final…"/></div>
+          <div><label className="lbl">Notes / Description</label><textarea className="f-in" rows={3} style={{resize:'vertical'}} value={editDesc} onChange={e=>setEditDesc(e.target.value)} placeholder="Additional notes…"/></div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}}>
+            <button className="btn-soft" onClick={()=>setEditMod(null)} style={{padding:'10px 20px',borderRadius:9,fontSize:13}}>Cancel</button>
+            <button className="btn-dark" onClick={saveEditMod} style={{padding:'10px 24px',borderRadius:9,fontSize:13,opacity:editTitle.trim()?1:.4,cursor:editTitle.trim()?'pointer':'not-allowed'}}>Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── Reschedule Modal ── */}
+    {reschedMod&&<div className="overlay open" onClick={e=>{if(e.target===e.currentTarget)setReschedMod(null)}}>
+      <div className="card" style={{width:'100%',maxWidth:420,padding:'1.75rem',animation:'scaleIn .22s ease'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
+          <span style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:800,color:'#1a1714'}}>🗓 Reschedule</span>
+          <button onClick={()=>setReschedMod(null)} style={{background:'transparent',border:'none',fontSize:18,cursor:'pointer',color:'rgba(90,82,72,.45)',lineHeight:1}}>✕</button>
+        </div>
+        <div style={{marginBottom:16,padding:'9px 13px',background:'rgba(194,105,42,.06)',borderRadius:10,fontSize:12,color:'rgba(90,82,72,.7)',fontWeight:600,fontFamily:'Syne,sans-serif'}}>
+          {reschedMod.title} · {reschedMod.bookedBy}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div><label className="lbl">New Date</label><input type="date" className="f-in" value={reschedDate} onChange={e=>setReschedDate(e.target.value)}/></div>
+          <div>
+            <label className="lbl">Start Time</label>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              <input className="t-box" value={reschedSH} onChange={e=>setReschedSH(e.target.value.replace(/\D/g,''))} maxLength={2}/>
+              <span style={{fontWeight:700,color:'rgba(90,82,72,.4)',fontSize:18}}>:</span>
+              <input className="t-box" value={reschedSM} onChange={e=>setReschedSM(e.target.value.replace(/\D/g,'').slice(0,2))} maxLength={2}/>
+              <div className="ampm-wrap">
+                <button className={`ampm-btn${reschedSAP==='AM'?' on':''}`} onClick={()=>setReschedSAP('AM')}>AM</button>
+                <button className={`ampm-btn${reschedSAP==='PM'?' on':''}`} onClick={()=>setReschedSAP('PM')}>PM</button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="lbl">End Time</label>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              <input className="t-box" value={reschedEH} onChange={e=>setReschedEH(e.target.value.replace(/\D/g,''))} maxLength={2}/>
+              <span style={{fontWeight:700,color:'rgba(90,82,72,.4)',fontSize:18}}>:</span>
+              <input className="t-box" value={reschedEM} onChange={e=>setReschedEM(e.target.value.replace(/\D/g,'').slice(0,2))} maxLength={2}/>
+              <div className="ampm-wrap">
+                <button className={`ampm-btn${reschedEAP==='AM'?' on':''}`} onClick={()=>setReschedEAP('AM')}>AM</button>
+                <button className={`ampm-btn${reschedEAP==='PM'?' on':''}`} onClick={()=>setReschedEAP('PM')}>PM</button>
+              </div>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}}>
+            <button className="btn-soft" onClick={()=>setReschedMod(null)} style={{padding:'10px 20px',borderRadius:9,fontSize:13}}>Cancel</button>
+            <button className="btn-dark" onClick={saveReschedMod} style={{padding:'10px 24px',borderRadius:9,fontSize:13,opacity:reschedDate?1:.4,cursor:reschedDate?'pointer':'not-allowed'}}>Reschedule</button>
+          </div>
+        </div>
+      </div>
+    </div>}
 
     {/* Top bar */}
     <div style={{height:58,background:at?at.header:'rgba(245,244,240,.95)',borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.32)'}`,padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
@@ -1137,7 +1304,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
             <option value="">All Profiles</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select className="f-in" style={{width:130}} value={statusF} onChange={e=>setStatusF(e.target.value)}>
-            <option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option>
+            <option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="completed">Completed</option>
           </select>
           <select className="f-in" style={{width:130}} value={typeF} onChange={e=>setTypeF(e.target.value)}>
             <option value="">All Types</option><option value="interview">Interview</option><option value="meeting">Meeting</option><option value="other">Other</option>
@@ -1151,8 +1318,9 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
                 {filtered.length===0?<tr><td colSpan={12} style={{textAlign:'center',padding:'3rem',color:'rgba(90,82,72,.28)'}}><div style={{fontSize:28,marginBottom:8,opacity:.2}}>◇</div><p style={{fontSize:13}}>No bookings found.</p></td></tr>
                 :filtered.map((b,i)=>{
                   const m=TC[b.type]||TC.other;const prof=profiles.find(p=>p.id===b.profileId)
-                  const isPending=(b.status||'pending')==='pending';const isApproved=b.status==='approved'
-                  return<tr key={b.id} className="animate-fadeUp" style={{animationDelay:`${Math.min(i,6)*.04}s`,background:isPending?'rgba(200,60,60,.03)':isApproved?'rgba(30,160,120,.03)':'transparent'}}>
+                  const isPending=(b.status||'pending')==='pending';const isApproved=b.status==='approved';const isCompleted=b.status==='completed'
+                  const isFlashing=flashId===b.id
+                  return<tr key={b.id} className={isFlashing?'row-complete-flash':'animate-fadeUp'} style={{animationDelay:isFlashing?undefined:`${Math.min(i,6)*.04}s`,background:isFlashing?undefined:isCompleted?'rgba(30,160,120,.13)':isPending?'rgba(200,60,60,.03)':isApproved?'rgba(30,160,120,.03)':'transparent',borderLeft:isCompleted?'3px solid rgba(30,160,120,.55)':'3px solid transparent'}}>
                     <td><StatusBadge status={b.status||'pending'}/></td>
                     <td>{prof?<div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={prof.name} size={26}/><div><div style={{fontSize:12,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{prof.name}</div><div style={{fontSize:10,color:'rgba(90,82,72,.5)'}}>{prof.role}</div></div></div>:'—'}</td>
                     <td><div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={b.bookedBy} size={26}/><span style={{fontSize:12,fontWeight:600,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{b.bookedBy}</span></div></td>
@@ -1172,6 +1340,9 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onClo
                         <button onClick={()=>onReject(b.id)} style={{background:'rgba(150,150,150,.08)',border:'1px solid rgba(150,150,150,.25)',color:'#777',borderRadius:7,padding:'4px 10px',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Syne,sans-serif',whiteSpace:'nowrap'}} onMouseOver={e=>e.currentTarget.style.background='rgba(150,150,150,.15)'} onMouseOut={e=>e.currentTarget.style.background='rgba(150,150,150,.08)'}>✕ Decline</button>
                       </>}
                       <button className="btn-del" onClick={()=>onDelete(b.id)} disabled={deleting===b.id} style={{opacity:deleting===b.id?.5:1}}>{deleting===b.id?'…':'Delete'}</button>
+                      <div className="kebab-wrap" style={{display:'inline-flex'}}>
+                        <button className="kebab-btn" onClick={e=>toggleMenu(e,b.id)} title="More options">⋮</button>
+                      </div>
                     </div></td>
                   </tr>
                 })}
@@ -1628,6 +1799,19 @@ export default function App(){
     if(error){setBookings(prev=>prev.filter(x=>x.id!==b.id));setToast({msg:'Error saving booking.',type:'pending'})}
     else setToast({msg:`Booking submitted for ${profiles.find(p=>p.id===b.profileId)?.name||''}. Awaiting admin approval.`,type:'pending'})
   }
+  async function updateBooking(id,updates){
+    setBookings(prev=>prev.map(b=>b.id===id?{...b,...updates}:b))
+    const dbMap={}
+    if(updates.status!==undefined)dbMap.status=updates.status
+    if(updates.title!==undefined)dbMap.title=updates.title
+    if(updates.type!==undefined)dbMap.type=updates.type
+    if(updates.rounds!==undefined)dbMap.rounds=updates.rounds
+    if(updates.desc!==undefined)dbMap.description=updates.desc
+    if(updates.date!==undefined)dbMap.date=updates.date
+    if(updates.startTime!==undefined)dbMap.start_time=updates.startTime
+    if(updates.endTime!==undefined)dbMap.end_time=updates.endTime
+    await supabase.from('bookings').update(dbMap).eq('id',id)
+  }
   async function approveBooking(id){setBookings(prev=>prev.map(b=>b.id===id?{...b,status:'approved'}:b));await supabase.from('bookings').update({status:'approved'}).eq('id',id)}
   async function rejectBooking(id){setBookings(prev=>prev.map(b=>b.id===id?{...b,status:'rejected'}:b));await supabase.from('bookings').update({status:'rejected'}).eq('id',id)}
   async function deleteBooking(id){if(!window.confirm('Delete?'))return;setDeleting(id);setBookings(prev=>prev.filter(b=>b.id!==id));await supabase.from('bookings').delete().eq('id',id);setDeleting(null)}
@@ -1713,7 +1897,7 @@ export default function App(){
     {toast&&<Toast {...toast} onClose={()=>setToast(null)}/>}
     <AdminPanel
       bookings={bookings} profiles={profiles} notices={notices}
-      onDelete={deleteBooking} onApprove={approveBooking} onReject={rejectBooking}
+      onDelete={deleteBooking} onApprove={approveBooking} onReject={rejectBooking} onUpdateBooking={updateBooking}
       onClose={()=>setScreen('user')} deleting={deleting}
       onAddProfile={addProfile} onDeleteProfile={deleteProfile}
       onSaveNotice={saveNotice} onDeleteNotice={deleteNotice}
