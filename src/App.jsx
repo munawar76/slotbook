@@ -141,8 +141,6 @@ const ADMIN_THEMES={
 
 const DEFAULT_PROFILES=[
   {id:'p3',name:'Data Engineer', role:'Data Engineering'},
-  {id:'p4',name:'Data Analytics',role:'Analytics'},
-  {id:'p5',name:'Data Science',  role:'Data Science'},
   {id:'p6',name:'Other',         role:'General'},
 ]
 const HOURS=Array.from({length:24},(_,i)=>i)
@@ -170,6 +168,36 @@ function to24(h,m,ap){let hh=Number(h);if(ap==='PM'&&hh!==12)hh+=12;if(ap==='AM'
 function to12(t){if(!t)return{h:'12',m:'00',ap:'AM'};const[H,M]=t.split(':').map(Number);return{h:String(H%12||12),m:padZ(M),ap:H>=12?'PM':'AM'}}
 function dTime(t){const{h,m,ap}=to12(t);return`${h}:${m} ${ap}`}
 function dDate(s){const d=parseDate(s);return`${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`}
+// Strip formatting + country code, keep the last 10 digits. Anything under 8 digits is
+// treated as unusable (returns '') so those bookings fall back to name grouping.
+function normPhone(raw){
+  let d=String(raw||'').replace(/\D/g,'')
+  if(d.length>10)d=d.slice(-10)
+  return d.length>=8?d:''
+}
+// Levenshtein distance — catches substituted digits AND missing/extra ones.
+function phoneDist(a,b){
+  if(a===b)return 0
+  if(Math.abs(a.length-b.length)>2)return 99
+  const m=a.length,n=b.length
+  let prev=Array.from({length:n+1},(_,j)=>j)
+  for(let i=1;i<=m;i++){
+    const cur=[i]
+    for(let j=1;j<=n;j++)cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1))
+    prev=cur
+  }
+  return prev[n]
+}
+// Interview titles embed round info ("Hexaware-L1", "NTT data L1 interview"), which would
+// otherwise count one employer several times. Strip the round qualifier to get the company.
+function normCompany(raw){
+  let s=String(raw||'').trim()
+  s=s.replace(/[\s\-–—_]*\b[lr]\s*-?\s*\d+\b.*$/i,'')
+  s=s.replace(/\b\d+\s*(st|nd|rd|th)?\s*round\b.*$/i,'')
+  s=s.replace(/\b(round|interview|screening)\b.*$/i,'')
+  s=s.replace(/[^\p{L}\p{N}]+/gu,' ').trim()
+  return s||String(raw||'').trim()
+}
 function tmins(t){const[h,m]=t.split(':').map(Number);return h*60+m}
 function olap(s1,e1,s2,e2){return tmins(s1)<tmins(e2)&&tmins(e1)>tmins(s2)}
 function initials(n){return(n||'?').split(' ').map(x=>x[0]).join('').toUpperCase().slice(0,2)}
@@ -1028,7 +1056,7 @@ function LinksPage({vaults,onClose,isAdmin,onAddVault,onDeleteVault,onAddLink,on
   )
 }
 
-function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpdateBooking,onClose,deleting,onAddProfile,onDeleteProfile,onSaveNotice,onDeleteNotice,vaults,onAddVault,onDeleteVault,onAddLink,onEditLink,onDeleteLink}){
+function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpdateBooking,onClose,deleting,onAddProfile,onDeleteProfile,onSaveNotice,onDeleteNotice,vaults,onAddVault,onDeleteVault,onAddLink,onEditLink,onDeleteLink,placements,onAddPlacement,onDeletePlacement}){
   const[tab,setTab]=useState('bookings')
   const[search,setSearch]=useState('');const[dateF,setDateF]=useState('');const[typeF,setTypeF]=useState('');const[profF,setProfF]=useState('');const[statusF,setStatusF]=useState('')
   const[newName,setNewName]=useState('');const[newRole,setNewRole]=useState('')
@@ -1045,6 +1073,16 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   const[editType,setEditType]=useState('interview')
   const[editRounds,setEditRounds]=useState('')
   const[editDesc,setEditDesc]=useState('')
+  // Candidates tab state
+  const[candSearch,setCandSearch]=useState('')
+  const[expandedCand,setExpandedCand]=useState(null)
+  const[showCleared,setShowCleared]=useState(false)
+  const[pCand,setPCand]=useState('')
+  const[pCandKey,setPCandKey]=useState(null)
+  const[showCandDrop,setShowCandDrop]=useState(false)
+  const[pCompany,setPCompany]=useState('')
+  const[pPkg,setPPkg]=useState('')
+  const[pClient,setPClient]=useState('')
   // Reschedule modal state
   const[reschedMod,setReschedMod]=useState(null)
   const[reschedDate,setReschedDate]=useState('')
@@ -1082,6 +1120,113 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   }).sort((a,b)=>dateF?a.startTime.localeCompare(b.startTime):new Date(b.createdAt||0)-new Date(a.createdAt||0))
   const pending=bookings.filter(b=>b.status==='pending').length
   const approved=bookings.filter(b=>b.status==='approved').length
+
+  // Candidate analytics — merge by phone number (same person even if the name was typed
+  // differently), falling back to name grouping when no usable phone was captured.
+  // Numbers within 2 digits of each other are treated as the same phone, so country-code
+  // prefixes and digit typos don't split one person into several records.
+  const phoneCount={}
+  bookings.forEach(b=>{const p=normPhone(b.userPhone);if(p)phoneCount[p]=(phoneCount[p]||0)+1})
+  // Star-cluster around the most-used numbers: the real number appears most often, typos orbit it.
+  const anchors=[]
+  const phoneToCanon={}
+  Object.keys(phoneCount)
+    .sort((a,b)=>phoneCount[b]-phoneCount[a]||a.localeCompare(b))
+    .forEach(p=>{
+      const hit=anchors.find(a=>phoneDist(a,p)<=2)
+      if(hit)phoneToCanon[p]=hit
+      else{anchors.push(p);phoneToCanon[p]=p}
+    })
+  function canonPhone(raw){const p=normPhone(raw);return p?(phoneToCanon[p]||p):''}
+
+  const phoneNameFreq={}
+  bookings.forEach(b=>{
+    const phone=canonPhone(b.userPhone)
+    if(!phone)return
+    const name=(b.bookedBy||'Unknown').trim()
+    phoneNameFreq[phone]=phoneNameFreq[phone]||{}
+    phoneNameFreq[phone][name]=(phoneNameFreq[phone][name]||0)+1
+  })
+  function canonicalNameForPhone(phone){
+    const freq=phoneNameFreq[phone];if(!freq)return null
+    return Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0]
+  }
+  const candMap={}
+  bookings.forEach(b=>{
+    const rawName=(b.bookedBy||'Unknown').trim()
+    const phone=canonPhone(b.userPhone)
+    const key=phone?'ph_'+phone:'nm_'+rawName.toLowerCase()
+    const displayName=phone?canonicalNameForPhone(phone):rawName
+    if(!candMap[key])candMap[key]={name:displayName,aliases:new Set(),phone,variants:new Set(),total:0,completed:0,upcoming:0,pendingC:0,rejected:0,companies:new Set(),rounds:new Set(),items:[]}
+    const c=candMap[key]
+    if(rawName.toLowerCase()!==displayName.toLowerCase())c.aliases.add(rawName)
+    const rawPhone=normPhone(b.userPhone)
+    if(rawPhone&&rawPhone!==phone)c.variants.add(rawPhone)
+    c.total++;c.items.push(b)
+    const st=b.status||'pending'
+    if(st==='completed')c.completed++
+    else if(st==='approved')c.upcoming++
+    else if(st==='pending')c.pendingC++
+    else if(st==='rejected')c.rejected++
+    if(b.title)c.companies.add(normCompany(b.title).toLowerCase())
+    if(b.rounds)c.rounds.add(b.rounds.trim())
+  })
+  const candidates=Object.entries(candMap)
+    .map(([key,c])=>({key,...c}))
+    .filter(c=>{
+      if(!candSearch)return true
+      const q=candSearch.toLowerCase()
+      return c.name.toLowerCase().includes(q)||c.phone.includes(candSearch)
+        ||[...c.variants].some(v=>v.includes(candSearch))
+        ||[...c.aliases].some(a=>a.toLowerCase().includes(q))
+    })
+    .sort((a,b)=>b.total-a.total)
+  const maxCandTotal=candidates.length?Math.max(...candidates.map(c=>c.total)):1
+
+  function placementsFor(c){
+    if(!c)return[]
+    return(placements||[]).filter(p=>{
+      const pp=canonPhone(p.phone)
+      return(c.phone&&pp&&pp===c.phone)||(!c.phone&&p.candidate.toLowerCase().trim()===c.name.toLowerCase())
+    })
+  }
+  function isCandPlaced(c){return placementsFor(c).length>0}
+
+  // Aggregate insights
+  const companyFreq={}
+  bookings.forEach(b=>{
+    if(!b.title)return
+    const norm=normCompany(b.title)
+    const k=norm.toLowerCase()
+    if(!companyFreq[k])companyFreq[k]={count:0,forms:{}}
+    companyFreq[k].count++
+    companyFreq[k].forms[norm]=(companyFreq[k].forms[norm]||0)+1
+  })
+  const topCompanies=Object.values(companyFreq)
+    .map(v=>[Object.entries(v.forms).sort((a,b)=>b[1]-a[1])[0][0],v.count])
+    .sort((a,b)=>b[1]-a[1]).slice(0,5)
+  const allCompanies=new Set(Object.keys(companyFreq))
+  const todayStr=fmtDate(new Date())
+  const weekStr=fmtDate(addDays(new Date(),7))
+  const thisWeekCount=bookings.filter(b=>b.date>=todayStr&&b.date<=weekStr).length
+  const activeCands=Object.values(candMap).filter(c=>c.items.some(b=>b.date>=todayStr)).length
+  const avgPerCand=Object.keys(candMap).length?(bookings.length/Object.keys(candMap).length).toFixed(1):0
+  const mergedCount=Object.values(candMap).reduce((n,c)=>n+c.aliases.size+c.variants.size,0)
+
+  // Suggestion list for the "Add Cleared Candidate" autocomplete
+  const candEntries=Object.entries(candMap).map(([key,c])=>({key,...c}))
+  const candSuggestions=(pCand.trim()
+    ?candEntries.filter(c=>c.name.toLowerCase().includes(pCand.trim().toLowerCase())||c.phone.includes(pCand.trim()))
+    :[...candEntries].sort((a,b)=>b.total-a.total)
+  ).slice(0,6)
+  const activeCand=pCandKey?candEntries.find(c=>c.key===pCandKey):(pCand.trim()?candEntries.find(c=>c.name.toLowerCase()===pCand.trim().toLowerCase()):null)
+  const activeCandPlacements=activeCand?placementsFor(activeCand):[]
+
+  function submitPlacement(){
+    if(!pCand.trim()||!pCompany.trim())return
+    onAddPlacement({id:uid(),candidate:pCand.trim(),phone:activeCand?.phone||'',company:pCompany.trim(),pkg:pPkg.trim(),client:pClient.trim(),createdAt:new Date().toISOString()})
+    setPCand('');setPCandKey(null);setPCompany('');setPPkg('');setPClient('');setShowCandDrop(false)
+  }
 
   async function postNotice(){
     if(!noticeTitle.trim()||!noticeMsg.trim())return
@@ -1270,7 +1415,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
 
     {/* Tabs */}
     <div style={{display:'flex',gap:0,borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.3)'}`,background:at?'rgba(255,255,255,.06)':'rgba(255,255,255,.6)',flexShrink:0}}>
-      {[['bookings','📅 Bookings'],['profiles','👤 Profiles'],['notices','📢 Notices'],['links','🔗 Link Vaults']].map(([k,lbl])=><button key={k} onClick={()=>setTab(k)}
+      {[['bookings','📅 Bookings'],['candidates','🎓 Candidates'],['profiles','👤 Profiles'],['notices','📢 Notices'],['links','🔗 Link Vaults']].map(([k,lbl])=><button key={k} onClick={()=>setTab(k)}
         style={{padding:'12px 24px',background:'transparent',border:'none',borderBottom:`2px solid ${tab===k?'#c2692a':'transparent'}`,color:tab===k?'#c2692a':at?at.muted:'rgba(90,82,72,.6)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:13,cursor:'pointer',transition:'all .2s'}}>
         {lbl}{k==='notices'&&notices.length>0&&<span style={{marginLeft:5,background:'rgba(194,105,42,.15)',color:'#c2692a',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:800}}>{notices.filter(n=>n.active!==false).length}</span>}
         {k==='links'&&(vaults||[]).length>0&&<span style={{marginLeft:5,background:'rgba(194,105,42,.15)',color:'#c2692a',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:800}}>{(vaults||[]).length}</span>}
@@ -1350,6 +1495,199 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
             </table>
           </div>
         </div>
+      </>}
+
+      {/* ── CANDIDATES TAB ── */}
+      {tab==='candidates'&&<>
+        {/* Hero banner */}
+        <div className="cand-hero">
+          <div className="cand-hero-orb"/>
+          <div className="cand-hero-orb2"/>
+          <div style={{position:'relative',zIndex:1,display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}>
+            <div style={{flex:1,minWidth:260}}>
+              <div className="cand-hero-eyebrow"><span className="cand-live-dot"/>Talent Pipeline</div>
+              <div style={{fontSize:'1.9rem',fontWeight:800,color:'#fff',fontFamily:'Sora,sans-serif',letterSpacing:'-.8px',lineHeight:1.1}}>
+                Candidate <span style={{background:'linear-gradient(100deg,#f4a03a,#c2692a 60%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>Intelligence</span>
+              </div>
+              <div style={{fontSize:12.5,color:'rgba(255,255,255,.55)',marginTop:7,maxWidth:440,lineHeight:1.6}}>Records merge automatically by phone number — name typos and nicknames never split one person into two.</div>
+            </div>
+            <div style={{display:'flex',gap:26,flexWrap:'wrap'}}>
+              {[[thisWeekCount,'Next 7 days'],[avgPerCand,'Avg / candidate'],[mergedCount,'Records merged']].map(([v,l])=><div key={l}>
+                <div style={{fontSize:'1.6rem',fontWeight:800,color:'#fff',fontFamily:'Sora,sans-serif',letterSpacing:'-1px',lineHeight:1}}>{v}</div>
+                <div style={{fontSize:9.5,color:'rgba(255,255,255,.42)',textTransform:'uppercase',letterSpacing:1.4,fontWeight:700,marginTop:5,fontFamily:'Syne,sans-serif'}}>{l}</div>
+              </div>)}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:'1.25rem'}}>
+          {[
+            {l:'Candidates',v:candEntries.length,c:'#c2692a',bg:'linear-gradient(135deg,rgba(194,105,42,.1),rgba(194,105,42,.02))',ic:'👥',sub:`${mergedCount} merged`},
+            {l:'Total Interviews',v:bookings.length,c:'#1a6ebf',bg:'linear-gradient(135deg,rgba(26,110,191,.09),rgba(26,110,191,.02))',ic:'🗓',sub:`${avgPerCand} avg each`},
+            {l:'Companies',v:allCompanies.size,c:'#1a9070',bg:'linear-gradient(135deg,rgba(30,160,120,.1),rgba(30,160,120,.02))',ic:'🏢',sub:`${activeCands} active candidates`},
+            {l:'Placed',v:(placements||[]).length,c:'#7c4dcc',bg:'linear-gradient(135deg,rgba(124,77,204,.13),rgba(124,77,204,.03))',ic:'🏆',sub:'Click to view →',click:true},
+          ].map(s=><div key={s.l} className={`stat-card card cand-stat${s.click?' cand-stat-click':''}${s.click&&showCleared?' cand-stat-on':''}`} style={{background:s.bg}}
+            onClick={s.click?()=>setShowCleared(v=>!v):undefined}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+              <div style={{fontSize:9,color:'rgba(90,82,72,.42)',textTransform:'uppercase',letterSpacing:1,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{s.l}</div>
+              <span style={{fontSize:15,opacity:.7}}>{s.ic}</span>
+            </div>
+            <div style={{fontSize:'2.2rem',fontWeight:800,fontFamily:'Sora,sans-serif',color:s.c,letterSpacing:'-2px',lineHeight:1}}>{s.v}</div>
+            <div style={{fontSize:10,color:s.click?'#7c4dcc':'rgba(90,82,72,.4)',marginTop:6,fontWeight:s.click?700:500,fontFamily:'Syne,sans-serif'}}>{s.click&&showCleared?'Click to hide ↑':s.sub}</div>
+          </div>)}
+        </div>
+
+        {/* ── Cleared / Placed panel (collapsible, top of page) ── */}
+        <div className="cand-cleared-banner" onClick={()=>setShowCleared(v=>!v)}>
+          <span style={{fontSize:19}}>🏆</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14.5,fontWeight:800,color:'#fff',fontFamily:'Sora,sans-serif',letterSpacing:'-.2px'}}>Placements &amp; Offers</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.62)',marginTop:1}}>{(placements||[]).length} candidate{(placements||[]).length!==1?'s':''} cleared so far — tap to {showCleared?'hide':'view & add'}</div>
+          </div>
+          <span style={{fontSize:13,color:'rgba(255,255,255,.7)',transform:showCleared?'rotate(180deg)':'none',transition:'transform .28s cubic-bezier(.22,1,.36,1)'}}>▼</span>
+        </div>
+
+        {showCleared&&<div className="cleared-panel">
+          <div className="card" style={{padding:'1.25rem',marginBottom:'1rem',position:'relative',overflow:'visible'}}>
+            <div style={{fontSize:11,fontWeight:700,color:'rgba(90,82,72,.5)',textTransform:'uppercase',letterSpacing:1,marginBottom:12,fontFamily:'Syne,sans-serif'}}>Add Cleared Candidate</div>
+
+            {activeCandPlacements.length>0&&<div key={activeCand?.key} className="cleared-warn-pop">
+              ⚠️ <b>{activeCand.name}</b> already cleared at {activeCandPlacements.map(p=>p.company).join(', ')} — adding again records another offer for the same person.
+            </div>}
+
+            <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+              <div style={{flex:1,minWidth:160,position:'relative'}}>
+                <label className="lbl">Candidate *</label>
+                <input className="f-in" placeholder="e.g. Ajay" value={pCand}
+                  onChange={e=>{setPCand(e.target.value);setPCandKey(null);setShowCandDrop(true)}}
+                  onFocus={()=>setShowCandDrop(true)}
+                  onBlur={()=>setTimeout(()=>setShowCandDrop(false),160)}/>
+                {showCandDrop&&<div className="cand-suggest">
+                  {candSuggestions.length===0&&<div style={{padding:'11px 14px',fontSize:12,color:'rgba(90,82,72,.42)'}}>No match — will add as a new candidate name.</div>}
+                  {candSuggestions.map(c=>{
+                    const placed=isCandPlaced(c)
+                    return<div key={c.key} className="cand-suggest-item" onMouseDown={()=>{setPCand(c.name);setPCandKey(c.key);setShowCandDrop(false)}}>
+                      <Avatar name={c.name} size={24}/>
+                      <span style={{fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{c.name}</span>
+                      {c.phone&&<span style={{fontSize:10,color:'rgba(90,82,72,.42)'}}>{c.phone}</span>}
+                      <div style={{flex:1}}/>
+                      {placed&&<span className="cand-suggest-tag">🏆 Cleared</span>}
+                    </div>
+                  })}
+                </div>}
+              </div>
+              <div style={{flex:1,minWidth:130}}><label className="lbl">Company *</label><input className="f-in" placeholder="e.g. Accolite" value={pCompany} onChange={e=>setPCompany(e.target.value)}/></div>
+              <div style={{flex:1,minWidth:110}}><label className="lbl">Package (optional)</label><input className="f-in" placeholder="e.g. 12 LPA" value={pPkg} onChange={e=>setPPkg(e.target.value)}/></div>
+              <div style={{flex:1,minWidth:110}}><label className="lbl">Client (optional)</label><input className="f-in" placeholder="e.g. NTT Data" value={pClient} onChange={e=>setPClient(e.target.value)}/></div>
+              <button className="btn-dark" onClick={submitPlacement} style={{padding:'11px 20px',borderRadius:10,fontSize:13,whiteSpace:'nowrap',opacity:pCand.trim()&&pCompany.trim()?1:.4,cursor:pCand.trim()&&pCompany.trim()?'pointer':'not-allowed'}}>+ Add</button>
+            </div>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:'.5rem'}}>
+            {(placements||[]).length===0&&<div style={{textAlign:'center',padding:'2rem',color:'rgba(90,82,72,.3)',fontSize:13}}>No cleared candidates recorded yet.</div>}
+            {(placements||[]).map((p,i)=><div key={p.id} className="card animate-fadeUp placement-row" style={{animationDelay:`${Math.min(i,8)*.045}s`,padding:'0.9rem 1.2rem',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+              <Avatar name={p.candidate} size={34}/>
+              <div style={{minWidth:120}}>
+                <div style={{fontSize:13,fontWeight:800,color:'#1a1714',fontFamily:'Sora,sans-serif'}}>{p.candidate}</div>
+                {p.createdAt&&<div style={{fontSize:10,color:'rgba(90,82,72,.4)',marginTop:1}}>{new Date(p.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>}
+              </div>
+              <span style={{fontSize:12,background:'linear-gradient(135deg,rgba(124,77,204,.14),rgba(124,77,204,.04))',color:'#7c4dcc',padding:'5px 13px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif',border:'1px solid rgba(124,77,204,.2)'}}>🏆 {p.company}</span>
+              {p.pkg&&<span style={{fontSize:11,background:'rgba(30,160,120,.09)',color:'#1a9070',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>💰 {p.pkg}</span>}
+              {p.client&&<span style={{fontSize:11,background:'rgba(26,110,191,.07)',color:'#1a6ebf',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>🏢 {p.client}</span>}
+              <div style={{flex:1}}/>
+              <button className="btn-del" onClick={()=>{if(window.confirm(`Remove placement record for ${p.candidate} at ${p.company}?`))onDeletePlacement(p.id)}}>Delete</button>
+            </div>)}
+          </div>
+        </div>}
+
+        {/* Top companies strip */}
+        {topCompanies.length>0&&<div className="card" style={{padding:'1rem 1.25rem',marginBottom:'1.25rem',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+          <span style={{fontSize:9.5,color:'rgba(90,82,72,.42)',textTransform:'uppercase',letterSpacing:1.2,fontWeight:700,fontFamily:'Syne,sans-serif',whiteSpace:'nowrap'}}>🔥 Most Interviewed</span>
+          {topCompanies.map(([name,n],i)=><span key={name} className="top-co-chip">
+            <span style={{opacity:.45,fontSize:10,marginRight:2}}>#{i+1}</span>{name}
+            <span style={{background:'rgba(194,105,42,.14)',color:'#c2692a',borderRadius:8,padding:'1px 7px',fontSize:10,marginLeft:6}}>{n}</span>
+          </span>)}
+        </div>}
+
+        {/* Search */}
+        <div style={{position:'relative',marginBottom:'1.25rem'}}>
+          <span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',fontSize:13,opacity:.5,pointerEvents:'none'}}>🔍</span>
+          <input className="f-in" placeholder="Search by candidate name or phone number…" style={{paddingLeft:36}} value={candSearch} onChange={e=>setCandSearch(e.target.value)}/>
+        </div>
+
+        {/* Candidate cards */}
+        <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:'2.25rem'}}>
+          {candidates.length===0&&<div style={{textAlign:'center',padding:'2.5rem',color:'rgba(90,82,72,.3)',fontSize:13}}>No candidates found.</div>}
+          {candidates.map(c=>{
+            const isOpen=expandedCand===c.key
+            const isPlaced=isCandPlaced(c)
+            const candPlacements=placementsFor(c)
+            const share=Math.round((c.total/maxCandTotal)*100)
+            const nextUp=c.items.filter(b=>b.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime))[0]
+            const ringColor=isPlaced?'#7c4dcc':nextUp?'#c2692a':'rgba(200,192,178,.5)'
+            return<div key={c.key} className="card animate-fadeUp cand-card" style={{padding:0,overflow:'hidden',border:isPlaced?'1.5px solid rgba(124,77,204,.35)':undefined}}>
+              {/* Header row — click to expand */}
+              <div onClick={()=>setExpandedCand(isOpen?null:c.key)} style={{display:'flex',alignItems:'center',gap:14,padding:'1.1rem 1.25rem',cursor:'pointer',flexWrap:'wrap',transition:'background .18s',background:isOpen?'rgba(194,105,42,.05)':'transparent'}}>
+                <div style={{position:'relative',flexShrink:0}}>
+                  <div style={{position:'absolute',inset:-3,borderRadius:'50%',border:`2px solid ${ringColor}`,opacity:isPlaced?1:.65}}/>
+                  <Avatar name={c.name} size={40}/>
+                </div>
+                <div style={{minWidth:150}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                    <span style={{fontSize:15.5,fontWeight:800,color:'#1a1714',fontFamily:'Sora,sans-serif',letterSpacing:'-.2px'}}>{c.name}</span>
+                    {isPlaced&&<span className="cand-placed-badge">🏆 Placed</span>}
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginTop:3,flexWrap:'wrap'}}>
+                    {c.phone&&<span style={{fontSize:11,color:'rgba(90,82,72,.5)',fontFamily:'DM Sans,sans-serif'}}>📱 {c.phone}</span>}
+                    {c.variants.size>0&&<span className="merge-chip" title={`Merged duplicate numbers: ${[...c.variants].join(', ')}`}>⇄ +{c.variants.size} number{c.variants.size!==1?'s':''}</span>}
+                    {c.aliases.size>0&&<span style={{fontSize:10,color:'rgba(90,82,72,.38)',fontStyle:'italic'}}>aka {[...c.aliases].join(', ')}</span>}
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',flex:1,alignItems:'center'}}>
+                  <span style={{fontSize:11,background:'rgba(26,110,191,.08)',color:'#1a6ebf',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{c.total} interview{c.total!==1?'s':''}</span>
+                  {nextUp
+                    ?<span style={{fontSize:11,background:'rgba(30,160,120,.09)',color:'#1a9070',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>📅 Next {dDate(nextUp.date).replace(/, \d{4}$/,'')}</span>
+                    :<span style={{fontSize:11,background:'rgba(150,150,150,.09)',color:'rgba(90,82,72,.5)',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>No upcoming</span>}
+                  {c.upcoming>0&&<span style={{fontSize:11,background:'rgba(194,105,42,.08)',color:'#c2692a',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{c.upcoming} approved</span>}
+                  {c.pendingC>0&&<span style={{fontSize:11,background:'rgba(230,168,0,.1)',color:'#a07000',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{c.pendingC} pending</span>}
+                  <span style={{fontSize:11,background:'rgba(200,192,178,.18)',color:'rgba(90,82,72,.65)',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{c.companies.size} compan{c.companies.size!==1?'ies':'y'}</span>
+                  {c.rounds.size>0&&<span style={{fontSize:11,background:'rgba(124,77,204,.07)',color:'#7c4dcc',padding:'4px 11px',borderRadius:12,fontWeight:700,fontFamily:'Syne,sans-serif'}}>{c.rounds.size} round type{c.rounds.size!==1?'s':''}</span>}
+                </div>
+                <span style={{fontSize:13,color:'rgba(90,82,72,.4)',transform:isOpen?'rotate(180deg)':'none',transition:'transform .25s'}}>▼</span>
+              </div>
+              {/* Progress bar */}
+              <div style={{height:4,background:'rgba(200,192,178,.2)',position:'relative'}}>
+                <div style={{position:'absolute',inset:0,width:`${share}%`,background:isPlaced?'linear-gradient(90deg,#7c4dcc,#b388ff)':'linear-gradient(90deg,#c2692a,#f4a03a)',transition:'width .6s cubic-bezier(.22,1,.36,1)'}}/>
+              </div>
+
+              {/* Expanded detail */}
+              {isOpen&&<div className="animate-fadeUp" style={{borderTop:'1px solid rgba(200,192,178,.28)',padding:'1.1rem 1.25rem',background:'rgba(255,255,255,.5)'}}>
+                {candPlacements.length>0&&<div style={{marginBottom:14,display:'flex',flexDirection:'column',gap:6}}>
+                  {candPlacements.map(p=><div key={p.id} style={{display:'flex',alignItems:'center',gap:8,padding:'9px 13px',background:'linear-gradient(135deg,rgba(124,77,204,.08),rgba(124,77,204,.02))',border:'1px solid rgba(124,77,204,.22)',borderRadius:10,fontSize:12,fontWeight:600,color:'#4a2d80',fontFamily:'Syne,sans-serif',flexWrap:'wrap'}}>
+                    🏆 Cleared at <b>{p.company}</b>{p.pkg&&<span style={{background:'rgba(30,160,120,.1)',color:'#1a9070',padding:'2px 8px',borderRadius:8,fontSize:10}}>💰 {p.pkg}</span>}{p.client&&<span style={{background:'rgba(26,110,191,.08)',color:'#1a6ebf',padding:'2px 8px',borderRadius:8,fontSize:10}}>🏢 {p.client}</span>}
+                  </div>)}
+                </div>}
+                <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:480}}>
+                  <thead><tr style={{textAlign:'left'}}>
+                    {['Company / Title','Date','Time (IST)','Round','Status'].map(h=><th key={h} style={{padding:'6px 10px',fontSize:9,textTransform:'uppercase',letterSpacing:1,color:'rgba(90,82,72,.42)',fontFamily:'Syne,sans-serif',fontWeight:700,borderBottom:'1px solid rgba(200,192,178,.3)'}}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {[...c.items].sort((a,b)=>b.date.localeCompare(a.date)||b.startTime.localeCompare(a.startTime)).map(b=><tr key={b.id} style={{borderBottom:'1px solid rgba(200,192,178,.15)'}}>
+                      <td style={{padding:'8px 10px',fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{b.title}</td>
+                      <td style={{padding:'8px 10px',color:'rgba(90,82,72,.7)',whiteSpace:'nowrap'}}>{dDate(b.date)}</td>
+                      <td style={{padding:'8px 10px',color:'#c2692a',fontWeight:700,fontFamily:'Syne,sans-serif',whiteSpace:'nowrap'}}>{dTime(b.startTime)} – {dTime(b.endTime)}</td>
+                      <td style={{padding:'8px 10px',color:'rgba(90,82,72,.65)'}}>{b.rounds||'—'}</td>
+                      <td style={{padding:'8px 10px'}}><StatusBadge status={b.status||'pending'} small/></td>
+                    </tr>)}
+                  </tbody>
+                </table>
+                </div>
+              </div>}
+            </div>
+          })}
+        </div>
+
       </>}
 
       {/* ── PROFILES TAB ── */}
@@ -1733,6 +2071,7 @@ export default function App(){
   const[profiles,setProfiles]=useState(DEFAULT_PROFILES)
   const[notices,setNotices]=useState([])
   const[vaults,setVaults]=useState([])
+  const[placements,setPlacements]=useState([])
   const[profilesLoaded,setProfilesLoaded]=useState(false)
   const[loading,setLoading]=useState(true)
   const[saving,setSaving]=useState(false)
@@ -1768,10 +2107,11 @@ export default function App(){
     const noticeSub=supabase.channel('notices-live').on('postgres_changes',{event:'*',schema:'public',table:'notices'},()=>fetchNotices()).subscribe()
     const profSub=supabase.channel('profiles-live').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>fetchProfiles()).subscribe()
     const vaultSub=supabase.channel('vaults-live').on('postgres_changes',{event:'*',schema:'public',table:'link_vaults'},()=>fetchVaults()).subscribe()
-    return()=>{bookSub.unsubscribe();noticeSub.unsubscribe();profSub.unsubscribe();vaultSub.unsubscribe()}
+    const placeSub=supabase.channel('placements-live').on('postgres_changes',{event:'*',schema:'public',table:'placements'},()=>fetchPlacements()).subscribe()
+    return()=>{bookSub.unsubscribe();noticeSub.unsubscribe();profSub.unsubscribe();vaultSub.unsubscribe();placeSub.unsubscribe()}
   },[])
 
-  async function doFetchAll(){setLoading(true);await Promise.all([fetchProfiles(),fetchBookings(),fetchNotices(),fetchVaults()]);setLoading(false)}
+  async function doFetchAll(){setLoading(true);await Promise.all([fetchProfiles(),fetchBookings(),fetchNotices(),fetchVaults(),fetchPlacements()]);setLoading(false)}
 
   async function fetchProfiles(){
     const{data,error}=await supabase.from('profiles').select('*').order('created_at',{ascending:true})
@@ -1789,6 +2129,20 @@ export default function App(){
   async function fetchVaults(){
     const{data,error}=await supabase.from('link_vaults').select('*').order('created_at',{ascending:true})
     if(!error)setVaults((data||[]).map(r=>({...r,links:typeof r.links==='string'?JSON.parse(r.links||'[]'):r.links||[]})))
+  }
+  async function fetchPlacements(){
+    const{data,error}=await supabase.from('placements').select('*').order('created_at',{ascending:false})
+    if(!error)setPlacements((data||[]).map(r=>({id:r.id,candidate:r.candidate,phone:r.phone||'',company:r.company,pkg:r.package||'',client:r.client||'',createdAt:r.created_at})))
+  }
+  async function addPlacement(p){
+    setPlacements(prev=>[p,...prev])
+    const{error}=await supabase.from('placements').insert([{id:p.id,candidate:p.candidate,phone:p.phone||'',company:p.company,package:p.pkg||'',client:p.client||''}])
+    if(error){setPlacements(prev=>prev.filter(x=>x.id!==p.id));setToast({msg:`Error: ${error.message}`,type:'pending'})}
+    else setToast({msg:`🎉 ${p.candidate} marked as cleared at ${p.company}!`,type:'success'})
+  }
+  async function deletePlacement(id){
+    setPlacements(prev=>prev.filter(p=>p.id!==id))
+    await supabase.from('placements').delete().eq('id',id)
   }
 
   async function saveBooking(b){
@@ -1903,6 +2257,7 @@ export default function App(){
       onSaveNotice={saveNotice} onDeleteNotice={deleteNotice}
       vaults={vaults} onAddVault={addVault} onDeleteVault={deleteVault}
       onAddLink={addLink} onEditLink={editLink} onDeleteLink={deleteLink}
+      placements={placements} onAddPlacement={addPlacement} onDeletePlacement={deletePlacement}
     />
   </>
 
