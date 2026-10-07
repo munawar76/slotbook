@@ -140,9 +140,11 @@ const ADMIN_THEMES={
 }
 
 const DEFAULT_PROFILES=[
-  {id:'p3',name:'Data Engineer', role:'Data Engineering'},
-  {id:'p6',name:'Other',         role:'General'},
+  {id:'p3',name:'Slot 1',role:'Booking Slot'},
+  {id:'p6',name:'Slot 2',role:'Booking Slot'},
 ]
+// Old names of the default profiles, renamed in the database on load (bookings keep their profileId)
+const LEGACY_PROFILE_NAMES={p3:['Data Engineer'],p6:['Other']}
 const HOURS=Array.from({length:24},(_,i)=>i)
 
 const TIMEZONES=[
@@ -2148,7 +2150,14 @@ export default function App(){
 
   async function fetchProfiles(){
     const{data,error}=await supabase.from('profiles').select('*').order('created_at',{ascending:true})
-    if(!error&&data&&data.length>0){setProfiles(data.map(r=>({id:r.id,name:r.name,role:r.role||r.name})));setProfilesLoaded(true)}
+    if(!error&&data&&data.length>0){
+      const stale=data.filter(r=>LEGACY_PROFILE_NAMES[r.id]?.includes(r.name))
+      if(stale.length){
+        const renamed=stale.map(r=>DEFAULT_PROFILES.find(p=>p.id===r.id))
+        await supabase.from('profiles').upsert(renamed.map(p=>({id:p.id,name:p.name,role:p.role})))
+        renamed.forEach(p=>{const r=data.find(x=>x.id===p.id);r.name=p.name;r.role=p.role})
+      }
+      setProfiles(data.map(r=>({id:r.id,name:r.name,role:r.role||r.name})));setProfilesLoaded(true)}
     else if(!profilesLoaded){const seeds=DEFAULT_PROFILES.map(p=>({id:p.id,name:p.name,role:p.role}));await supabase.from('profiles').upsert(seeds);setProfilesLoaded(true)}
   }
   async function fetchBookings(){
