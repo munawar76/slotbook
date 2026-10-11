@@ -237,6 +237,7 @@ function StatusBadge({status,small=false}){
     approved: {bg:'rgba(30,160,120,.1)',  color:'#1a9070',border:'rgba(30,160,120,.3)',label:'✓ Approved'},
     rejected: {bg:'#d63030',             color:'#fff',  border:'#b82828',            label:'✕ Declined',glow:true},
     completed:{bg:'rgba(30,160,120,.18)',color:'#0f7a5a',border:'rgba(30,160,120,.5)',label:'● Completed'},
+    cancelled:{bg:'rgba(120,120,120,.12)',color:'#666',border:'rgba(120,120,120,.35)',label:'⊘ Cancelled'},
   }
   const s=cfg[status]||cfg.pending
   return<span style={{fontSize:small?9:10,padding:small?'2px 7px':'4px 10px',borderRadius:20,background:s.bg,color:s.color,border:`1px solid ${s.border}`,fontFamily:'Syne,sans-serif',fontWeight:700,textTransform:'uppercase',letterSpacing:'.6px',whiteSpace:'nowrap',boxShadow:s.glow?'0 2px 8px rgba(214,48,48,.35)':'none'}}>{s.label}</span>
@@ -531,7 +532,7 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
   const[rounds,setRounds]=useState('')
   const[desc,setDesc]=useState('')
   const profile=profiles.find(p=>p.id===profileId)
-  const profB=bookings.filter(b=>b.profileId===profileId&&(b.status||'pending')!=='rejected')
+  const profB=bookings.filter(b=>b.profileId===profileId&&!['rejected','cancelled'].includes(b.status||'pending'))
   const isIST=selectedTZ==='Asia/Kolkata'
   const tzInfo=TIMEZONES.find(z=>z.tz===selectedTZ)||TIMEZONES[0]
   const istStart=isIST?start:convertTimeTZ(start,selectedTZ,'Asia/Kolkata')
@@ -675,6 +676,13 @@ function DayModal({dateStr,bookings,profileId,userName,onBookHere,onClose,onCanc
           const m=TC[b.type]||TC.other
           const isOwn=userName&&b.bookedBy.toLowerCase()===userName.toLowerCase()
           const canCancel=isOwn&&(b.status==='pending')
+          if(b.status==='cancelled')return<div key={b.id} className="animate-fadeUp" style={{animationDelay:`${i*.07}s`,background:'rgba(120,120,120,.06)',border:'1px solid rgba(120,120,120,.25)',borderLeft:'4px solid #999',borderRadius:'0 12px 12px 0',padding:'12px 14px',opacity:.8}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+              <span style={{fontSize:13,fontWeight:700,color:'#777',fontFamily:'Syne,sans-serif',textDecoration:'line-through'}}>{dTime(b.startTime)} — {dTime(b.endTime)} <span style={{fontSize:9,fontWeight:500,opacity:.7}}>IST</span></span>
+              <StatusBadge status="cancelled" small/>
+            </div>
+            <div style={{fontSize:11,color:'rgba(90,82,72,.4)',marginTop:3}}>⊘ Booking cancelled · slot is free</div>
+          </div>
           return<div key={b.id} className="animate-fadeUp" style={{animationDelay:`${i*.07}s`,background:b.status==='rejected'?'rgba(214,48,48,.1)':b.status==='pending'?'rgba(255,255,255,.95)':m.bg,border:b.status==='rejected'?'1px solid rgba(214,48,48,.4)':b.status==='pending'?'2px dashed #e6a800':`1px solid ${m.border}`,borderLeft:b.status==='rejected'?'4px solid #d63030':b.status==='pending'?'4px solid #e6a800':`3px solid ${m.color}`,borderRadius:'0 12px 12px 0',padding:'12px 14px'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
               <span style={{fontSize:13,fontWeight:700,color:b.status==='rejected'?'#d63030':b.status==='pending'?'#a07000':m.color,fontFamily:'Syne,sans-serif'}}>{dTime(b.startTime)} — {dTime(b.endTime)} <span style={{fontSize:9,fontWeight:500,opacity:.7}}>IST</span></span>
@@ -1114,10 +1122,13 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
 
   const at=ADMIN_THEMES[adminTheme]
   const today=fmtDate(new Date())
+  const tomorrow=fmtDate(addDays(new Date(),1))
+  const AFTER_TMRW='after-tomorrow'
+  const matchDate=b=>!dateF||(dateF===AFTER_TMRW?b.date>tomorrow:b.date===dateF)
   const filtered=bookings.filter(b=>{
     const ms=!search||(b.title+' '+(b.desc||'')+' '+b.bookedBy).toLowerCase().includes(search.toLowerCase())
-    return ms&&(!dateF||b.date===dateF)&&(!typeF||b.type===typeF)&&(!profF||b.profileId===profF)&&(!statusF||b.status===statusF)
-  }).sort((a,b)=>dateF?a.startTime.localeCompare(b.startTime):new Date(b.createdAt||0)-new Date(a.createdAt||0))
+    return ms&&matchDate(b)&&(!typeF||b.type===typeF)&&(!profF||b.profileId===profF)&&(!statusF||b.status===statusF)
+  }).sort((a,b)=>dateF===AFTER_TMRW?(a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime)):dateF?a.startTime.localeCompare(b.startTime):new Date(b.createdAt||0)-new Date(a.createdAt||0))
   const pending=bookings.filter(b=>b.status==='pending').length
   const approved=bookings.filter(b=>b.status==='approved').length
 
@@ -1269,6 +1280,12 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
       setTimeout(()=>setFlashId(f=>f===id?null:f),1600)
     }
   }
+  function toggleCancel(b){
+    setOpenMenu(null)
+    if(b.status==='cancelled'){onUpdateBooking(b.id,{status:'approved'});return}
+    if(!window.confirm(`Cancel "${b.title}" booked by ${b.bookedBy} on ${dDate(b.date)}?\n\nThe booking stays on record as Cancelled and the slot becomes free.`))return
+    onUpdateBooking(b.id,{status:'cancelled'})
+  }
   function openEditMod(b){
     setEditMod(b);setEditTitle(b.title);setEditType(b.type||'interview')
     setEditRounds(b.rounds||'');setEditDesc(b.desc||'');setOpenMenu(null)
@@ -1308,6 +1325,13 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
         <button className="kebab-item korange" onClick={()=>openReschedMod(b)}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3" width="13" height="11.5" rx="2" stroke="#c2692a" strokeWidth="1.4"/><path d="M5 1.5v3M11 1.5v3M1.5 7h13" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/></svg>
           Reschedule
+        </button>
+        <div className="kebab-sep"/>
+        <button className={`kebab-item ${b.status==='cancelled'?'kgreen':'kred'}`} onClick={()=>toggleCancel(b)}>
+          {b.status==='cancelled'
+            ?<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5V5h2.5" stroke="#1a9070" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            :<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#c03838" strokeWidth="1.5"/><path d="M3.5 12.5l9-9" stroke="#c03838" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+          {b.status==='cancelled'?'Undo Cancel':'Cancel Booking'}
         </button>
       </>})()}
     </div>,
@@ -1435,21 +1459,21 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
         <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:'1.25rem'}}>
           <input className="f-in" placeholder="Search…" style={{flex:1,minWidth:150}} value={search} onChange={e=>setSearch(e.target.value)}/>
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
-            {[['Today',today],['Tomorrow',fmtDate(addDays(new Date(),1))]].map(([lbl,d])=>{
+            {[['Today',today,'📅'],['Tomorrow',tomorrow,'🌅'],['After Tomorrow',AFTER_TMRW,'📆']].map(([lbl,d,icon])=>{
               const isActive=dateF===d
               return<button key={lbl} onClick={()=>setDateF(isActive?'':d)}
                 style={{padding:'10px 16px',borderRadius:10,border:`1.5px solid ${isActive?'#c2692a':'rgba(200,192,178,.46)'}`,background:isActive?'rgba(194,105,42,.1)':'rgba(255,255,255,.9)',color:isActive?'#c2692a':'rgba(90,82,72,.7)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',transition:'all .18s',boxShadow:isActive?'0 0 0 3px rgba(194,105,42,.12)':'none'}}>
-                {lbl==='Today'?'📅':'🌅'} {lbl}
+                {icon} {lbl}
                 {isActive&&<span style={{marginLeft:6,fontSize:10,opacity:.6}}>✕</span>}
               </button>
             })}
           </div>
-          <input type="date" className="f-in" style={{width:150}} value={dateF} onChange={e=>setDateF(e.target.value)}/>
+          <input type="date" className="f-in" style={{width:150}} value={dateF===AFTER_TMRW?'':dateF} onChange={e=>setDateF(e.target.value)}/>
           <select className="f-in" style={{width:140}} value={profF} onChange={e=>setProfF(e.target.value)}>
             <option value="">All Profiles</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select className="f-in" style={{width:130}} value={statusF} onChange={e=>setStatusF(e.target.value)}>
-            <option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="completed">Completed</option>
+            <option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
           </select>
           <select className="f-in" style={{width:130}} value={typeF} onChange={e=>setTypeF(e.target.value)}>
             <option value="">All Types</option><option value="interview">Interview</option><option value="meeting">Meeting</option><option value="other">Other</option>
@@ -1463,9 +1487,9 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
                 {filtered.length===0?<tr><td colSpan={12} style={{textAlign:'center',padding:'3rem',color:'rgba(90,82,72,.28)'}}><div style={{fontSize:28,marginBottom:8,opacity:.2}}>◇</div><p style={{fontSize:13}}>No bookings found.</p></td></tr>
                 :filtered.map((b,i)=>{
                   const m=TC[b.type]||TC.other;const prof=profiles.find(p=>p.id===b.profileId)
-                  const isPending=(b.status||'pending')==='pending';const isApproved=b.status==='approved';const isCompleted=b.status==='completed'
+                  const isPending=(b.status||'pending')==='pending';const isApproved=b.status==='approved';const isCompleted=b.status==='completed';const isCancelled=b.status==='cancelled'
                   const isFlashing=flashId===b.id
-                  return<tr key={b.id} className={isFlashing?'row-complete-flash':'animate-fadeUp'} style={{animationDelay:isFlashing?undefined:`${Math.min(i,6)*.04}s`,background:isFlashing?undefined:isCompleted?'rgba(30,160,120,.13)':isPending?'rgba(200,60,60,.03)':isApproved?'rgba(30,160,120,.03)':'transparent',borderLeft:isCompleted?'3px solid rgba(30,160,120,.55)':'3px solid transparent'}}>
+                  return<tr key={b.id} className={isFlashing?'row-complete-flash':'animate-fadeUp'} style={{animationDelay:isFlashing?undefined:`${Math.min(i,6)*.04}s`,opacity:isCancelled?.6:1,background:isFlashing?undefined:isCancelled?'rgba(120,120,120,.06)':isCompleted?'rgba(30,160,120,.13)':isPending?'rgba(200,60,60,.03)':isApproved?'rgba(30,160,120,.03)':'transparent',borderLeft:isCompleted?'3px solid rgba(30,160,120,.55)':'3px solid transparent'}}>
                     <td><StatusBadge status={b.status||'pending'}/></td>
                     <td>{prof?<div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={prof.name} size={26}/><div><div style={{fontSize:12,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{prof.name}</div><div style={{fontSize:10,color:'rgba(90,82,72,.5)'}}>{prof.role}</div></div></div>:'—'}</td>
                     <td><div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={b.bookedBy} size={26}/><span style={{fontSize:12,fontWeight:600,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{b.bookedBy}</span></div></td>
@@ -1989,10 +2013,10 @@ function MonthView({year,month,bookings,profileId,onDayClick,searchHighlight}){
           </div>
           <div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}}>
             {dayB.slice(0,3).map(b=>{
-              const m=TC[b.type]||TC.other;const isPending=(b.status||'pending')==='pending';const isRej=b.status==='rejected'
-              return<div key={b.id} className="ev-pill" style={{background:isRej?'rgba(214,48,48,.08)':isPending?'rgba(255,255,255,.95)':m.bg,color:isRej?'#c02020':isPending?'#a07000':m.color,borderLeftColor:isRej?'#d63030':isPending?'#e6a800':m.color,border:isPending?'1.5px dashed #e6a800':undefined,textDecoration:isRej?'line-through':'none',opacity:isRej?.82:1}}>
+              const m=TC[b.type]||TC.other;const isPending=(b.status||'pending')==='pending';const isRej=b.status==='rejected';const isCan=b.status==='cancelled'
+              return<div key={b.id} className="ev-pill" style={{background:isCan?'rgba(120,120,120,.08)':isRej?'rgba(214,48,48,.08)':isPending?'rgba(255,255,255,.95)':m.bg,color:isCan?'#777':isRej?'#c02020':isPending?'#a07000':m.color,borderLeftColor:isCan?'#999':isRej?'#d63030':isPending?'#e6a800':m.color,border:isPending?'1.5px dashed #e6a800':undefined,textDecoration:isRej||isCan?'line-through':'none',opacity:isRej||isCan?.82:1}}>
                 <span className="ev-time">{dTime(b.startTime)}</span><span style={{opacity:.5,fontSize:10}}>–</span><span className="ev-time">{dTime(b.endTime)}</span>
-                <span style={{marginLeft:'auto',fontSize:8,fontWeight:700,color:isRej?'#d63030':isPending?'#e6a800':'#1a9070'}}>{isRej?'✕':isPending?'⏳':'✓'}</span>
+                <span style={{marginLeft:'auto',fontSize:8,fontWeight:700,color:isCan?'#777':isRej?'#d63030':isPending?'#e6a800':'#1a9070'}}>{isCan?'⊘':isRej?'✕':isPending?'⏳':'✓'}</span>
               </div>
             })}
             {dayB.length>3&&<div className="more-link">+{dayB.length-3} more</div>}
@@ -2050,6 +2074,10 @@ function TimeGrid({dates,bookings,profileId,onHourClick}){
               const top=startM*(ROW_H/60),height=Math.max((endM-startM)*(ROW_H/60),24)
               const m=TC[b.type]||TC.other
               const isPending=(b.status||'pending')==='pending';const isRej=b.status==='rejected'
+              if(b.status==='cancelled')return<div key={b.id} style={{position:'absolute',left:3,right:3,top,height,background:'rgba(120,120,120,.06)',border:'1.5px solid rgba(120,120,120,.3)',borderLeft:'4px solid #999',borderRadius:'0 8px 8px 0',padding:'5px 8px',overflow:'hidden',zIndex:3,opacity:.75,pointerEvents:'none'}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#777',fontFamily:'Syne,sans-serif',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textDecoration:'line-through'}}>{dTime(b.startTime)} – {dTime(b.endTime)}</div>
+                {height>28&&<div style={{fontSize:9.5,fontWeight:600,marginTop:2,color:'#777'}}>⊘ Cancelled</div>}
+              </div>
               return<div key={b.id} style={{position:'absolute',left:3,right:3,top,height,background:isRej?'rgba(214,48,48,.08)':isPending?'rgba(255,255,255,.95)':m.bg,border:isRej?'1.5px solid #d63030':isPending?'2px dashed #e6a800':`1.5px solid ${m.border}`,borderLeft:isRej?'4px solid #d63030':isPending?'4px solid #e6a800':`4px solid ${m.color}`,borderRadius:'0 8px 8px 0',padding:'5px 8px',overflow:'hidden',zIndex:4,cursor:'default',boxShadow:isPending?'0 2px 12px rgba(230,168,0,.2)':'0 1px 6px rgba(0,0,0,.07)'}}>
                 <div style={{fontSize:10,fontWeight:700,color:isRej?'#c02020':isPending?'#a07000':m.color,fontFamily:'Syne,sans-serif',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{dTime(b.startTime)} – {dTime(b.endTime)}</div>
                 {height>28&&<div style={{fontSize:9.5,fontWeight:600,marginTop:2,color:isRej?'#fff':isPending?'#b08000':'#fff',background:isRej?'rgba(214,48,48,.7)':isPending?'rgba(230,168,0,.15)':m.color,display:'inline-flex',alignItems:'center',gap:3,padding:'1px 7px',borderRadius:10,whiteSpace:'nowrap'}}>

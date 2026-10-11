@@ -70,6 +70,7 @@ html,body,#root{height:100%;font-family:'DM Sans',sans-serif;background:var(--t-
 .kebab-item.kgreen{color:#1a9070;}.kebab-item.kgreen:hover{background:rgba(30,160,120,.1);}
 .kebab-item.kblue{color:#1a6ebf;}.kebab-item.kblue:hover{background:rgba(26,110,191,.08);}
 .kebab-item.korange{color:#c2692a;}.kebab-item.korange:hover{background:rgba(194,105,42,.08);}
+.kebab-item.kred{color:#c03838;}.kebab-item.kred:hover{background:rgba(200,60,60,.08);}
 .kebab-sep{height:1px;background:rgba(200,192,178,.32);margin:4px 6px;}
 
 /* ── Candidates tab ── */
