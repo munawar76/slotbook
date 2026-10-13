@@ -1066,7 +1066,7 @@ function LinksPage({vaults,onClose,isAdmin,onAddVault,onDeleteVault,onAddLink,on
 
 function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpdateBooking,onClose,deleting,onAddProfile,onDeleteProfile,onSaveNotice,onDeleteNotice,vaults,onAddVault,onDeleteVault,onAddLink,onEditLink,onDeleteLink,placements,onAddPlacement,onDeletePlacement}){
   const[tab,setTab]=useState('bookings')
-  const[search,setSearch]=useState('');const[dateF,setDateF]=useState('');const[typeF,setTypeF]=useState('');const[profF,setProfF]=useState('');const[statusF,setStatusF]=useState('')
+  const[search,setSearch]=useState('');const[dateF,setDateF]=useState('');const[gtF,setGtF]=useState(false);const[typeF,setTypeF]=useState('');const[profF,setProfF]=useState('');const[statusF,setStatusF]=useState('')
   const[newName,setNewName]=useState('');const[newRole,setNewRole]=useState('')
   const[noticeTitle,setNoticeTitle]=useState('');const[noticeMsg,setNoticeMsg]=useState('');const[noticeSaving,setNoticeSaving]=useState(false)
   const[adminTheme,setAdminTheme]=useState(()=>localStorage.getItem('slotbook-admin-theme')||'default')
@@ -1123,12 +1123,13 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   const at=ADMIN_THEMES[adminTheme]
   const today=fmtDate(new Date())
   const tomorrow=fmtDate(addDays(new Date(),1))
-  const AFTER_TMRW='after-tomorrow'
-  const matchDate=b=>!dateF||(dateF===AFTER_TMRW?b.date>tomorrow:b.date===dateF)
+  // ">" mode: show bookings after the selected date (defaults to after tomorrow)
+  const gtBase=dateF||tomorrow
+  const matchDate=b=>gtF?b.date>gtBase:(!dateF||b.date===dateF)
   const filtered=bookings.filter(b=>{
     const ms=!search||(b.title+' '+(b.desc||'')+' '+b.bookedBy).toLowerCase().includes(search.toLowerCase())
     return ms&&matchDate(b)&&(!typeF||b.type===typeF)&&(!profF||b.profileId===profF)&&(!statusF||b.status===statusF)
-  }).sort((a,b)=>dateF===AFTER_TMRW?(a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime)):dateF?a.startTime.localeCompare(b.startTime):new Date(b.createdAt||0)-new Date(a.createdAt||0))
+  }).sort((a,b)=>gtF?(a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime)):dateF?a.startTime.localeCompare(b.startTime):new Date(b.createdAt||0)-new Date(a.createdAt||0))
   const pending=bookings.filter(b=>b.status==='pending').length
   const approved=bookings.filter(b=>b.status==='approved').length
 
@@ -1263,7 +1264,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   function toggleMenu(e,id){
     if(openMenu===id){setOpenMenu(null);return}
     const r=e.currentTarget.getBoundingClientRect()
-    const dropW=176,dropH=136
+    const dropW=176,dropH=185
     const left=Math.max(8,Math.min(r.right-dropW,window.innerWidth-dropW-8))
     const top=r.bottom+dropH>window.innerHeight-8?r.top-dropH-4:r.bottom+4
     setMenuPos({top,left})
@@ -1415,7 +1416,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
     </div>}
 
     {/* Top bar */}
-    <div style={{height:58,background:at?at.header:'rgba(245,244,240,.95)',borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.32)'}`,padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
+    <div className="adm-topbar" style={{height:58,background:at?at.header:'rgba(245,244,240,.95)',borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.32)'}`,padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
         <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.2)'}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/><line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/><line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/><circle cx="12" cy="12" r="1.6" fill="#c2692a"/></svg>
@@ -1438,7 +1439,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
     </div>
 
     {/* Tabs */}
-    <div style={{display:'flex',gap:0,borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.3)'}`,background:at?'rgba(255,255,255,.06)':'rgba(255,255,255,.6)',flexShrink:0}}>
+    <div className="adm-tabs" style={{display:'flex',gap:0,borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.3)'}`,background:at?'rgba(255,255,255,.06)':'rgba(255,255,255,.6)',flexShrink:0}}>
       {[['bookings','📅 Bookings'],['candidates','🎓 Candidates'],['profiles','👤 Profiles'],['notices','📢 Notices'],['links','🔗 Link Vaults']].map(([k,lbl])=><button key={k} onClick={()=>setTab(k)}
         style={{padding:'12px 24px',background:'transparent',border:'none',borderBottom:`2px solid ${tab===k?'#c2692a':'transparent'}`,color:tab===k?'#c2692a':at?at.muted:'rgba(90,82,72,.6)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:13,cursor:'pointer',transition:'all .2s'}}>
         {lbl}{k==='notices'&&notices.length>0&&<span style={{marginLeft:5,background:'rgba(194,105,42,.15)',color:'#c2692a',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:800}}>{notices.filter(n=>n.active!==false).length}</span>}
@@ -1446,7 +1447,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
       </button>)}
     </div>
 
-    <div style={{flex:1,overflowY:'auto',padding:'1.5rem',position:'relative',zIndex:1}}>
+    <div className="adm-content" style={{flex:1,overflowY:'auto',padding:'1.5rem',position:'relative',zIndex:1}}>
 
       {/* ── BOOKINGS TAB ── */}
       {tab==='bookings'&&<>
@@ -1456,10 +1457,10 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
             <div style={{fontSize:'2.2rem',fontWeight:800,fontFamily:'Syne,sans-serif',color:s.c,letterSpacing:'-2px',lineHeight:1}}>{s.v}</div>
           </div>)}
         </div>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:'1.25rem'}}>
+        <div className="adm-filters" style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:'1.25rem'}}>
           <input className="f-in" placeholder="Search…" style={{flex:1,minWidth:150}} value={search} onChange={e=>setSearch(e.target.value)}/>
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
-            {[['Today',today,'📅'],['Tomorrow',tomorrow,'🌅'],['After Tomorrow',AFTER_TMRW,'📆']].map(([lbl,d,icon])=>{
+            {[['Today',today,'📅'],['Tomorrow',tomorrow,'🌅']].map(([lbl,d,icon])=>{
               const isActive=dateF===d
               return<button key={lbl} onClick={()=>setDateF(isActive?'':d)}
                 style={{padding:'10px 16px',borderRadius:10,border:`1.5px solid ${isActive?'#c2692a':'rgba(200,192,178,.46)'}`,background:isActive?'rgba(194,105,42,.1)':'rgba(255,255,255,.9)',color:isActive?'#c2692a':'rgba(90,82,72,.7)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',transition:'all .18s',boxShadow:isActive?'0 0 0 3px rgba(194,105,42,.12)':'none'}}>
@@ -1467,8 +1468,12 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
                 {isActive&&<span style={{marginLeft:6,fontSize:10,opacity:.6}}>✕</span>}
               </button>
             })}
+            <button onClick={()=>setGtF(v=>!v)} title={`Show all bookings after ${dDate(gtBase)}`}
+              style={{padding:'10px 16px',borderRadius:10,border:`1.5px solid ${gtF?'#c2692a':'rgba(200,192,178,.46)'}`,background:gtF?'rgba(194,105,42,.1)':'rgba(255,255,255,.9)',color:gtF?'#c2692a':'rgba(90,82,72,.7)',fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:gtF?12:15,lineHeight:1,cursor:'pointer',whiteSpace:'nowrap',transition:'all .18s',boxShadow:gtF?'0 0 0 3px rgba(194,105,42,.12)':'none'}}>
+              {gtF?<>&gt; after {dDate(gtBase).replace(/, \d{4}$/,'')}<span style={{marginLeft:6,fontSize:10,opacity:.6}}>✕</span></>:'>'}
+            </button>
           </div>
-          <input type="date" className="f-in" style={{width:150}} value={dateF===AFTER_TMRW?'':dateF} onChange={e=>setDateF(e.target.value)}/>
+          <input type="date" className="f-in" style={{width:150}} value={dateF} onChange={e=>setDateF(e.target.value)}/>
           <select className="f-in" style={{width:140}} value={profF} onChange={e=>setProfF(e.target.value)}>
             <option value="">All Profiles</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -2313,10 +2318,10 @@ export default function App(){
           </div>
           <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.35rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.4px'}}>SlotBook</span>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:9,flex:1,justifyContent:'center',maxWidth:320}}>
+        <div className="hdr-search" style={{display:'flex',alignItems:'center',gap:9,flex:1,justifyContent:'center',maxWidth:320}}>
           <SearchBar bookings={bookings} profiles={profiles} onResult={b=>{setSearchQ(b.bookedBy);setProfileId(b.profileId);const d=parseDate(b.date);setCalYear(d.getFullYear());setCalMonth(d.getMonth());setViewDate(d);setViewMode('month')}} onClear={()=>setSearchQ('')}/>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:9}}>
+        <div className="hdr-actions" style={{display:'flex',alignItems:'center',gap:9}}>
           <ThemePicker theme={theme} setTheme={setTheme}/>
           <DragProfileSwitcher profiles={profiles} selected={profileId} onSelect={pid=>setProfileId(pid)}/>
           {userName&&<div style={{display:'flex',background:'rgba(255,255,255,.72)',border:'1px solid rgba(200,192,178,.4)',borderRadius:20,padding:'4px 10px 4px 6px',fontSize:12,color:'rgba(90,82,72,.78)',alignItems:'center',gap:6}}>
@@ -2334,7 +2339,7 @@ export default function App(){
 
       <NoticeBanner notices={notices} onClickNotice={n=>setNoticeDetail(n)}/>
 
-      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+      <div className="app-body" style={{display:'flex',flex:1,overflow:'hidden'}}>
         {/* Sidebar */}
         <aside className="sidebar">
           {curProfile&&<div style={{background:'linear-gradient(135deg,rgba(194,105,42,.08),rgba(30,160,120,.05))',border:'1px solid rgba(194,105,42,.18)',borderRadius:12,padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
@@ -2366,7 +2371,7 @@ export default function App(){
         </aside>
 
         {/* Main */}
-        <main style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',padding:'1.25rem 1.5rem'}}>
+        <main className="app-main" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',padding:'1.25rem 1.5rem'}}>
           <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:'1rem',flexWrap:'wrap',flexShrink:0}}>
             <button className="btn-soft" onClick={goToday} style={{padding:'8px 16px',borderRadius:8,fontSize:12,fontWeight:600}}>Today</button>
             <div style={{display:'flex',gap:5}}>
@@ -2388,7 +2393,7 @@ export default function App(){
           </div>
           {loading?<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:300,gap:12,color:'rgba(90,82,72,.5)',fontSize:14}}><span className="spinner"/> Loading…</div>
           :viewMode==='month'?<div style={{flex:1,overflowY:'auto'}}><MonthView year={calYear} month={calMonth} bookings={bookings} profileId={profileId} onDayClick={onDayClick} searchHighlight={searchQ}/></div>
-          :<div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}><TimeGrid dates={viewMode==='week'?weekDates:dayDates} bookings={bookings} profileId={profileId} onHourClick={(ds,h,d)=>handleBook(ds,h)}/></div>}
+          :<div className="tg-wrap" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}><TimeGrid dates={viewMode==='week'?weekDates:dayDates} bookings={bookings} profileId={profileId} onHourClick={(ds,h,d)=>handleBook(ds,h)}/></div>}
         </main>
       </div>
     </div>

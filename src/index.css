@@ -195,11 +195,50 @@ html,body,#root{height:100%;font-family:'DM Sans',sans-serif;background:var(--t-
 .stat-card{border-radius:14px;padding:1rem 1.2rem}
 .animate-fadeUp{animation:fadeUp .35s ease both}
 
+/* ── Phone layout (laptop/desktop untouched) ── */
 @media(max-width:700px){
-  .sidebar{display:none}
-  .cal-cell{min-height:80px;padding:7px 8px 6px}
-  .ev-pill{font-size:10px;padding:3px 6px}
-  .main-header{padding:0 1rem}
+  /* Header: logo, then actions, then full-width search — scrolls away with the page */
+  .main-header{height:auto;padding:10px 12px;flex-wrap:wrap;gap:10px;position:relative}
+  .hdr-actions{order:2;width:100%;flex-wrap:wrap;gap:6px!important}
+  .hdr-search{order:3;max-width:none!important;flex-basis:100%}
+  .hdr-search>*{width:100%!important;max-width:none!important}
+  .hdr-actions>.btn-dark{padding:8px 12px!important;font-size:12px!important}
+
+  /* Body: normal page scroll, calendar first, sidebar options below it */
+  .app-body{flex-direction:column;overflow:visible!important}
+  .app-main{overflow:visible!important;padding:12px!important}
+  .tg-wrap{height:70vh;flex:none!important}
+  .app-main h1{flex:1 1 100%!important;font-size:1.3rem!important;order:-1}
+  .app-main h1>span{font-size:1rem!important}
+  .sidebar{width:100%;order:2;border-right:none;border-top:1px solid var(--t-border,rgba(200,192,178,.22));padding:16px 12px;gap:1rem}
+
+  /* Month grid: 7 equal columns that fit the screen */
+  .cal-header-row,.cal-body{grid-template-columns:repeat(7,minmax(0,1fr))}
+  .cal-dow{font-size:9px;letter-spacing:.3px;padding:8px 0}
+  .cal-cell{min-height:76px;padding:5px 3px 4px}
+  .cell-date{margin-bottom:4px}
+  .cell-date>span{display:none}
+  .cell-num{font-size:11px}
+  .cell-num.is-today{width:22px;height:22px;font-size:11px;border-radius:6px}
+  .ev-pill{font-size:9px;padding:2px 3px;gap:2px;border-left-width:2px;border-radius:4px}
+  .ev-pill .ev-time{font-size:8.5px}
+  .ev-pill>span:nth-child(2),.ev-pill>span:nth-child(3){display:none}
+  .more-link{font-size:9px;padding-left:2px}
+
+  .toast-wrap{left:12px;right:12px;max-width:none}
+
+  /* Admin panel */
+  .adm-topbar{height:auto!important;flex-wrap:wrap;gap:8px;padding:10px 12px!important;position:relative!important}
+  .adm-topbar>div:last-child{flex-wrap:wrap;width:100%}
+  .adm-topbar>div:last-child>button{padding:6px 10px!important}
+  .adm-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .adm-tabs::-webkit-scrollbar{display:none}
+  .adm-tabs>button{padding:11px 14px!important;font-size:12px!important;white-space:nowrap;flex-shrink:0}
+  .adm-content{padding:12px!important}
+  .adm-filters>input:first-child{flex-basis:100%!important}
+  .adm-filters>div{flex-wrap:wrap;width:100%}
+  .adm-filters>div>button{flex:1;padding:9px 10px!important}
+  .adm-filters>input[type=date],.adm-filters>select{flex:1 1 45%;width:auto!important;min-width:0}
   .adm-tbl{font-size:11px}
   .adm-tbl th,.adm-tbl td{padding:8px}
 }
