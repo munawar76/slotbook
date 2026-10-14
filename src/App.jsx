@@ -145,6 +145,8 @@ const DEFAULT_PROFILES=[
 ]
 // Old names of the default profiles, renamed in the database on load (bookings keep their profileId)
 const LEGACY_PROFILE_NAMES={p3:['Data Engineer'],p6:['Other']}
+// Profiles seeded by older builds (Data Analytics, Data Science) — removed from the database on load
+const RETIRED_PROFILE_IDS=['p4','p5']
 const HOURS=Array.from({length:24},(_,i)=>i)
 
 const TIMEZONES=[
@@ -2157,7 +2159,9 @@ export default function App(){
         await supabase.from('profiles').upsert(renamed.map(p=>({id:p.id,name:p.name,role:p.role})))
         renamed.forEach(p=>{const r=data.find(x=>x.id===p.id);r.name=p.name;r.role=p.role})
       }
-      setProfiles(data.map(r=>({id:r.id,name:r.name,role:r.role||r.name})));setProfilesLoaded(true)}
+      const retired=data.filter(r=>RETIRED_PROFILE_IDS.includes(r.id))
+      if(retired.length)await supabase.from('profiles').delete().in('id',retired.map(r=>r.id))
+      setProfiles(data.filter(r=>!RETIRED_PROFILE_IDS.includes(r.id)).map(r=>({id:r.id,name:r.name,role:r.role||r.name})));setProfilesLoaded(true)}
     else if(!profilesLoaded){const seeds=DEFAULT_PROFILES.map(p=>({id:p.id,name:p.name,role:p.role}));await supabase.from('profiles').upsert(seeds);setProfilesLoaded(true)}
   }
   async function fetchBookings(){
