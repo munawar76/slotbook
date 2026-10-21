@@ -145,6 +145,8 @@ const DEFAULT_PROFILES=[
 ]
 // Old names of the default profiles, renamed in the database on load (bookings keep their profileId)
 const LEGACY_PROFILE_NAMES={p3:['Data Engineer'],p6:['Other']}
+// Profiles seeded by older builds (Data Analytics, Data Science) — removed from the database on load
+const RETIRED_PROFILE_IDS=['p4','p5']
 const HOURS=Array.from({length:24},(_,i)=>i)
 
 const TIMEZONES=[
@@ -239,6 +241,7 @@ function StatusBadge({status,small=false}){
     approved: {bg:'rgba(30,160,120,.1)',  color:'#1a9070',border:'rgba(30,160,120,.3)',label:'✓ Approved'},
     rejected: {bg:'#d63030',             color:'#fff',  border:'#b82828',            label:'✕ Declined',glow:true},
     completed:{bg:'rgba(30,160,120,.18)',color:'#0f7a5a',border:'rgba(30,160,120,.5)',label:'● Completed'},
+    cancelled:{bg:'rgba(120,120,120,.12)',color:'#666',border:'rgba(120,120,120,.35)',label:'⊘ Cancelled'},
   }
   const s=cfg[status]||cfg.pending
   return<span style={{fontSize:small?9:10,padding:small?'2px 7px':'4px 10px',borderRadius:20,background:s.bg,color:s.color,border:`1px solid ${s.border}`,fontFamily:'Syne,sans-serif',fontWeight:700,textTransform:'uppercase',letterSpacing:'.6px',whiteSpace:'nowrap',boxShadow:s.glow?'0 2px 8px rgba(214,48,48,.35)':'none'}}>{s.label}</span>
@@ -539,7 +542,7 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
   const istStart=isIST?start:convertTimeTZ(start,selectedTZ,'Asia/Kolkata')
   const istEnd=isIST?end:convertTimeTZ(end,selectedTZ,'Asia/Kolkata')
   const endErr=end&&start&&tmins(end)<=tmins(start)
-  const takenBy=id=>!endErr&&istStart&&istEnd&&bookings.some(b=>b.profileId===id&&(b.status||'pending')!=='rejected'&&b.date===date&&olap(istStart,istEnd,b.startTime,b.endTime))
+  const takenBy=id=>!endErr&&istStart&&istEnd&&bookings.some(b=>b.profileId===id&&!['rejected','cancelled'].includes(b.status||'pending')&&b.date===date&&olap(istStart,istEnd,b.startTime,b.endTime))
   const clash=takenBy(pid)
   // When the chosen slot is taken, point the user at a slot that is still free for this time
   const freeProfiles=clash?profiles.filter(p=>p.id!==pid&&!takenBy(p.id)):[]
@@ -683,6 +686,13 @@ function DayModal({dateStr,bookings,profileId,userName,onBookHere,onClose,onCanc
           const m=TC[b.type]||TC.other
           const isOwn=userName&&b.bookedBy.toLowerCase()===userName.toLowerCase()
           const canCancel=isOwn&&(b.status==='pending')
+          if(b.status==='cancelled')return<div key={b.id} className="animate-fadeUp" style={{animationDelay:`${i*.07}s`,background:'rgba(120,120,120,.06)',border:'1px solid rgba(120,120,120,.25)',borderLeft:'4px solid #999',borderRadius:'0 12px 12px 0',padding:'12px 14px',opacity:.8}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+              <span style={{fontSize:13,fontWeight:700,color:'#777',fontFamily:'Syne,sans-serif',textDecoration:'line-through'}}>{dTime(b.startTime)} — {dTime(b.endTime)} <span style={{fontSize:9,fontWeight:500,opacity:.7}}>IST</span></span>
+              <StatusBadge status="cancelled" small/>
+            </div>
+            <div style={{fontSize:11,color:'rgba(90,82,72,.4)',marginTop:3}}>⊘ Booking cancelled · slot is free</div>
+          </div>
           return<div key={b.id} className="animate-fadeUp" style={{animationDelay:`${i*.07}s`,background:b.status==='rejected'?'rgba(214,48,48,.1)':b.status==='pending'?'rgba(255,255,255,.95)':m.bg,border:b.status==='rejected'?'1px solid rgba(214,48,48,.4)':b.status==='pending'?'2px dashed #e6a800':`1px solid ${m.border}`,borderLeft:b.status==='rejected'?'4px solid #d63030':b.status==='pending'?'4px solid #e6a800':`3px solid ${m.color}`,borderRadius:'0 12px 12px 0',padding:'12px 14px'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
               <span style={{fontSize:13,fontWeight:700,color:b.status==='rejected'?'#d63030':b.status==='pending'?'#a07000':m.color,fontFamily:'Syne,sans-serif'}}>{dTime(b.startTime)} — {dTime(b.endTime)} <span style={{fontSize:9,fontWeight:500,opacity:.7}}>IST</span></span>
@@ -1066,7 +1076,7 @@ function LinksPage({vaults,onClose,isAdmin,onAddVault,onDeleteVault,onAddLink,on
 
 function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpdateBooking,onClose,deleting,onAddProfile,onDeleteProfile,onSaveNotice,onDeleteNotice,vaults,onAddVault,onDeleteVault,onAddLink,onEditLink,onDeleteLink,placements,onAddPlacement,onDeletePlacement}){
   const[tab,setTab]=useState('bookings')
-  const[search,setSearch]=useState('');const[dateF,setDateF]=useState('');const[typeF,setTypeF]=useState('');const[profF,setProfF]=useState('');const[statusF,setStatusF]=useState('')
+  const[search,setSearch]=useState('');const[dateF,setDateF]=useState('');const[gtF,setGtF]=useState(false);const[typeF,setTypeF]=useState('');const[profF,setProfF]=useState('');const[statusF,setStatusF]=useState('')
   const[newName,setNewName]=useState('');const[newRole,setNewRole]=useState('')
   const[noticeTitle,setNoticeTitle]=useState('');const[noticeMsg,setNoticeMsg]=useState('');const[noticeSaving,setNoticeSaving]=useState(false)
   const[adminTheme,setAdminTheme]=useState(()=>localStorage.getItem('slotbook-admin-theme')||'default')
@@ -1125,10 +1135,14 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
 
   const at=ADMIN_THEMES[adminTheme]
   const today=fmtDate(new Date())
+  const tomorrow=fmtDate(addDays(new Date(),1))
+  // ">" mode: show bookings after the selected date (defaults to after tomorrow)
+  const gtBase=dateF||tomorrow
+  const matchDate=b=>gtF?b.date>gtBase:(!dateF||b.date===dateF)
   const filtered=bookings.filter(b=>{
     const ms=!search||(b.title+' '+(b.desc||'')+' '+b.bookedBy).toLowerCase().includes(search.toLowerCase())
-    return ms&&(!dateF||b.date===dateF)&&(!typeF||b.type===typeF)&&(!profF||b.profileId===profF)&&(!statusF||b.status===statusF)
-  }).sort((a,b)=>dateF?a.startTime.localeCompare(b.startTime):new Date(b.createdAt||0)-new Date(a.createdAt||0))
+    return ms&&matchDate(b)&&(!typeF||b.type===typeF)&&(!profF||b.profileId===profF)&&(!statusF||b.status===statusF)
+  }).sort((a,b)=>gtF?(a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime)):dateF?a.startTime.localeCompare(b.startTime):new Date(b.createdAt||0)-new Date(a.createdAt||0))
   const pending=bookings.filter(b=>b.status==='pending').length
   const approved=bookings.filter(b=>b.status==='approved').length
 
@@ -1263,7 +1277,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   function toggleMenu(e,id){
     if(openMenu===id){setOpenMenu(null);return}
     const r=e.currentTarget.getBoundingClientRect()
-    const dropW=176,dropH=136
+    const dropW=176,dropH=185
     const left=Math.max(8,Math.min(r.right-dropW,window.innerWidth-dropW-8))
     const top=r.bottom+dropH>window.innerHeight-8?r.top-dropH-4:r.bottom+4
     setMenuPos({top,left})
@@ -1280,13 +1294,19 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
       setTimeout(()=>setFlashId(f=>f===id?null:f),1600)
     }
   }
+  function toggleCancel(b){
+    setOpenMenu(null)
+    if(b.status==='cancelled'){onUpdateBooking(b.id,{status:'approved'});return}
+    if(!window.confirm(`Cancel "${b.title}" booked by ${b.bookedBy} on ${dDate(b.date)}?\n\nThe booking stays on record as Cancelled and the slot becomes free.`))return
+    onUpdateBooking(b.id,{status:'cancelled'})
+  }
   function openEditMod(b){
     setEditMod(b);setEditTitle(b.title);setEditType(b.type||'interview')
     setEditRounds(b.rounds||'');setEditDesc(b.desc||'');setOpenMenu(null)
     setEditProfile(b.profileId);setEditStart(b.startTime);setEditEnd(b.endTime)
   }
   // Another active booking on the same slot, date and overlapping time (the edited booking itself excluded)
-  const slotTakenBy=(id,pid,date,s,e)=>bookings.find(b=>b.id!==id&&b.profileId===pid&&b.date===date&&(b.status||'pending')!=='rejected'&&olap(s,e,b.startTime,b.endTime))
+  const slotTakenBy=(id,pid,date,s,e)=>bookings.find(b=>b.id!==id&&b.profileId===pid&&b.date===date&&!['rejected','cancelled'].includes(b.status||'pending')&&olap(s,e,b.startTime,b.endTime))
   const editEndErr=editMod&&tmins(editEnd)<=tmins(editStart)
   const editClash=editMod&&!editEndErr?slotTakenBy(editMod.id,editProfile,editMod.date,editStart,editEnd):null
   const editFree=editClash?profiles.filter(p=>p.id!==editProfile&&!slotTakenBy(editMod.id,p.id,editMod.date,editStart,editEnd)):[]
@@ -1330,6 +1350,13 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
         <button className="kebab-item korange" onClick={()=>openReschedMod(b)}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3" width="13" height="11.5" rx="2" stroke="#c2692a" strokeWidth="1.4"/><path d="M5 1.5v3M11 1.5v3M1.5 7h13" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/></svg>
           Reschedule
+        </button>
+        <div className="kebab-sep"/>
+        <button className={`kebab-item ${b.status==='cancelled'?'kgreen':'kred'}`} onClick={()=>toggleCancel(b)}>
+          {b.status==='cancelled'
+            ?<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5V5h2.5" stroke="#1a9070" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            :<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#c03838" strokeWidth="1.5"/><path d="M3.5 12.5l9-9" stroke="#c03838" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+          {b.status==='cancelled'?'Undo Cancel':'Cancel Booking'}
         </button>
       </>})()}
     </div>,
@@ -1430,7 +1457,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
     </div>}
 
     {/* Top bar */}
-    <div style={{height:58,background:at?at.header:'rgba(245,244,240,.95)',borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.32)'}`,padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
+    <div className="adm-topbar" style={{height:58,background:at?at.header:'rgba(245,244,240,.95)',borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.32)'}`,padding:'0 1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,backdropFilter:'blur(14px)',position:'sticky',top:0,zIndex:40}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
         <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#fde8d5,#fef3e2)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(194,105,42,.2)'}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="rgba(194,105,42,.12)" stroke="#c2692a" strokeWidth="1.6"/><line x1="12" y1="12" x2="12" y2="5.5" stroke="#c2692a" strokeWidth="1.8" strokeLinecap="round"/><line x1="12" y1="12" x2="16.2" y2="14.5" stroke="#c2692a" strokeWidth="1.4" strokeLinecap="round"/><circle cx="12" cy="12" r="1.6" fill="#c2692a"/></svg>
@@ -1453,7 +1480,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
     </div>
 
     {/* Tabs */}
-    <div style={{display:'flex',gap:0,borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.3)'}`,background:at?'rgba(255,255,255,.06)':'rgba(255,255,255,.6)',flexShrink:0}}>
+    <div className="adm-tabs" style={{display:'flex',gap:0,borderBottom:`1px solid ${at?at.border:'rgba(200,192,178,.3)'}`,background:at?'rgba(255,255,255,.06)':'rgba(255,255,255,.6)',flexShrink:0}}>
       {[['bookings','📅 Bookings'],['candidates','🎓 Candidates'],['profiles','👤 Profiles'],['notices','📢 Notices'],['links','🔗 Link Vaults']].map(([k,lbl])=><button key={k} onClick={()=>setTab(k)}
         style={{padding:'12px 24px',background:'transparent',border:'none',borderBottom:`2px solid ${tab===k?'#c2692a':'transparent'}`,color:tab===k?'#c2692a':at?at.muted:'rgba(90,82,72,.6)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:13,cursor:'pointer',transition:'all .2s'}}>
         {lbl}{k==='notices'&&notices.length>0&&<span style={{marginLeft:5,background:'rgba(194,105,42,.15)',color:'#c2692a',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:800}}>{notices.filter(n=>n.active!==false).length}</span>}
@@ -1461,7 +1488,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
       </button>)}
     </div>
 
-    <div style={{flex:1,overflowY:'auto',padding:'1.5rem',position:'relative',zIndex:1}}>
+    <div className="adm-content" style={{flex:1,overflowY:'auto',padding:'1.5rem',position:'relative',zIndex:1}}>
 
       {/* ── BOOKINGS TAB ── */}
       {tab==='bookings'&&<>
@@ -1471,24 +1498,28 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
             <div style={{fontSize:'2.2rem',fontWeight:800,fontFamily:'Syne,sans-serif',color:s.c,letterSpacing:'-2px',lineHeight:1}}>{s.v}</div>
           </div>)}
         </div>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:'1.25rem'}}>
+        <div className="adm-filters" style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:'1.25rem'}}>
           <input className="f-in" placeholder="Search…" style={{flex:1,minWidth:150}} value={search} onChange={e=>setSearch(e.target.value)}/>
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
-            {[['Today',today],['Tomorrow',fmtDate(addDays(new Date(),1))]].map(([lbl,d])=>{
+            {[['Today',today,'📅'],['Tomorrow',tomorrow,'🌅']].map(([lbl,d,icon])=>{
               const isActive=dateF===d
               return<button key={lbl} onClick={()=>setDateF(isActive?'':d)}
                 style={{padding:'10px 16px',borderRadius:10,border:`1.5px solid ${isActive?'#c2692a':'rgba(200,192,178,.46)'}`,background:isActive?'rgba(194,105,42,.1)':'rgba(255,255,255,.9)',color:isActive?'#c2692a':'rgba(90,82,72,.7)',fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',transition:'all .18s',boxShadow:isActive?'0 0 0 3px rgba(194,105,42,.12)':'none'}}>
-                {lbl==='Today'?'📅':'🌅'} {lbl}
+                {icon} {lbl}
                 {isActive&&<span style={{marginLeft:6,fontSize:10,opacity:.6}}>✕</span>}
               </button>
             })}
+            <button onClick={()=>setGtF(v=>!v)} title={`Show all bookings after ${dDate(gtBase)}`}
+              style={{padding:'10px 16px',borderRadius:10,border:`1.5px solid ${gtF?'#c2692a':'rgba(200,192,178,.46)'}`,background:gtF?'rgba(194,105,42,.1)':'rgba(255,255,255,.9)',color:gtF?'#c2692a':'rgba(90,82,72,.7)',fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:gtF?12:15,lineHeight:1,cursor:'pointer',whiteSpace:'nowrap',transition:'all .18s',boxShadow:gtF?'0 0 0 3px rgba(194,105,42,.12)':'none'}}>
+              {gtF?<>&gt; after {dDate(gtBase).replace(/, \d{4}$/,'')}<span style={{marginLeft:6,fontSize:10,opacity:.6}}>✕</span></>:'>'}
+            </button>
           </div>
           <input type="date" className="f-in" style={{width:150}} value={dateF} onChange={e=>setDateF(e.target.value)}/>
           <select className="f-in" style={{width:140}} value={profF} onChange={e=>setProfF(e.target.value)}>
             <option value="">All Profiles</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select className="f-in" style={{width:130}} value={statusF} onChange={e=>setStatusF(e.target.value)}>
-            <option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="completed">Completed</option>
+            <option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
           </select>
           <select className="f-in" style={{width:130}} value={typeF} onChange={e=>setTypeF(e.target.value)}>
             <option value="">All Types</option><option value="interview">Interview</option><option value="meeting">Meeting</option><option value="other">Other</option>
@@ -1502,9 +1533,9 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
                 {filtered.length===0?<tr><td colSpan={12} style={{textAlign:'center',padding:'3rem',color:'rgba(90,82,72,.28)'}}><div style={{fontSize:28,marginBottom:8,opacity:.2}}>◇</div><p style={{fontSize:13}}>No bookings found.</p></td></tr>
                 :filtered.map((b,i)=>{
                   const m=TC[b.type]||TC.other;const prof=profiles.find(p=>p.id===b.profileId)
-                  const isPending=(b.status||'pending')==='pending';const isApproved=b.status==='approved';const isCompleted=b.status==='completed'
+                  const isPending=(b.status||'pending')==='pending';const isApproved=b.status==='approved';const isCompleted=b.status==='completed';const isCancelled=b.status==='cancelled'
                   const isFlashing=flashId===b.id
-                  return<tr key={b.id} className={isFlashing?'row-complete-flash':'animate-fadeUp'} style={{animationDelay:isFlashing?undefined:`${Math.min(i,6)*.04}s`,background:isFlashing?undefined:isCompleted?'rgba(30,160,120,.13)':isPending?'rgba(200,60,60,.03)':isApproved?'rgba(30,160,120,.03)':'transparent',borderLeft:isCompleted?'3px solid rgba(30,160,120,.55)':'3px solid transparent'}}>
+                  return<tr key={b.id} className={isFlashing?'row-complete-flash':'animate-fadeUp'} style={{animationDelay:isFlashing?undefined:`${Math.min(i,6)*.04}s`,opacity:isCancelled?.6:1,background:isFlashing?undefined:isCancelled?'rgba(120,120,120,.06)':isCompleted?'rgba(30,160,120,.13)':isPending?'rgba(200,60,60,.03)':isApproved?'rgba(30,160,120,.03)':'transparent',borderLeft:isCompleted?'3px solid rgba(30,160,120,.55)':'3px solid transparent'}}>
                     <td><StatusBadge status={b.status||'pending'}/></td>
                     <td>{prof?<div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={prof.name} size={26}/><div><div style={{fontSize:12,fontWeight:700,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{prof.name}</div><div style={{fontSize:10,color:'rgba(90,82,72,.5)'}}>{prof.role}</div></div></div>:'—'}</td>
                     <td><div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={b.bookedBy} size={26}/><span style={{fontSize:12,fontWeight:600,color:'#1a1714',fontFamily:'Syne,sans-serif'}}>{b.bookedBy}</span></div></td>
@@ -2028,10 +2059,10 @@ function MonthView({year,month,bookings,profileId,onDayClick,searchHighlight}){
           </div>
           <div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}}>
             {dayB.slice(0,3).map(b=>{
-              const m=TC[b.type]||TC.other;const isPending=(b.status||'pending')==='pending';const isRej=b.status==='rejected'
-              return<div key={b.id} className="ev-pill" style={{background:isRej?'rgba(214,48,48,.08)':isPending?'rgba(255,255,255,.95)':m.bg,color:isRej?'#c02020':isPending?'#a07000':m.color,borderLeftColor:isRej?'#d63030':isPending?'#e6a800':m.color,border:isPending?'1.5px dashed #e6a800':undefined,textDecoration:isRej?'line-through':'none',opacity:isRej?.82:1}}>
+              const m=TC[b.type]||TC.other;const isPending=(b.status||'pending')==='pending';const isRej=b.status==='rejected';const isCan=b.status==='cancelled'
+              return<div key={b.id} className="ev-pill" style={{background:isCan?'rgba(120,120,120,.08)':isRej?'rgba(214,48,48,.08)':isPending?'rgba(255,255,255,.95)':m.bg,color:isCan?'#777':isRej?'#c02020':isPending?'#a07000':m.color,borderLeftColor:isCan?'#999':isRej?'#d63030':isPending?'#e6a800':m.color,border:isPending?'1.5px dashed #e6a800':undefined,textDecoration:isRej||isCan?'line-through':'none',opacity:isRej||isCan?.82:1}}>
                 <span className="ev-time">{dTime(b.startTime)}</span><span style={{opacity:.5,fontSize:10}}>–</span><span className="ev-time">{dTime(b.endTime)}</span>
-                <span style={{marginLeft:'auto',fontSize:8,fontWeight:700,color:isRej?'#d63030':isPending?'#e6a800':'#1a9070'}}>{isRej?'✕':isPending?'⏳':'✓'}</span>
+                <span style={{marginLeft:'auto',fontSize:8,fontWeight:700,color:isCan?'#777':isRej?'#d63030':isPending?'#e6a800':'#1a9070'}}>{isCan?'⊘':isRej?'✕':isPending?'⏳':'✓'}</span>
               </div>
             })}
             {dayB.length>3&&<div className="more-link">+{dayB.length-3} more</div>}
@@ -2089,6 +2120,10 @@ function TimeGrid({dates,bookings,profileId,onHourClick}){
               const top=startM*(ROW_H/60),height=Math.max((endM-startM)*(ROW_H/60),24)
               const m=TC[b.type]||TC.other
               const isPending=(b.status||'pending')==='pending';const isRej=b.status==='rejected'
+              if(b.status==='cancelled')return<div key={b.id} style={{position:'absolute',left:3,right:3,top,height,background:'rgba(120,120,120,.06)',border:'1.5px solid rgba(120,120,120,.3)',borderLeft:'4px solid #999',borderRadius:'0 8px 8px 0',padding:'5px 8px',overflow:'hidden',zIndex:3,opacity:.75,pointerEvents:'none'}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#777',fontFamily:'Syne,sans-serif',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textDecoration:'line-through'}}>{dTime(b.startTime)} – {dTime(b.endTime)}</div>
+                {height>28&&<div style={{fontSize:9.5,fontWeight:600,marginTop:2,color:'#777'}}>⊘ Cancelled</div>}
+              </div>
               return<div key={b.id} style={{position:'absolute',left:3,right:3,top,height,background:isRej?'rgba(214,48,48,.08)':isPending?'rgba(255,255,255,.95)':m.bg,border:isRej?'1.5px solid #d63030':isPending?'2px dashed #e6a800':`1.5px solid ${m.border}`,borderLeft:isRej?'4px solid #d63030':isPending?'4px solid #e6a800':`4px solid ${m.color}`,borderRadius:'0 8px 8px 0',padding:'5px 8px',overflow:'hidden',zIndex:4,cursor:'default',boxShadow:isPending?'0 2px 12px rgba(230,168,0,.2)':'0 1px 6px rgba(0,0,0,.07)'}}>
                 <div style={{fontSize:10,fontWeight:700,color:isRej?'#c02020':isPending?'#a07000':m.color,fontFamily:'Syne,sans-serif',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{dTime(b.startTime)} – {dTime(b.endTime)}</div>
                 {height>28&&<div style={{fontSize:9.5,fontWeight:600,marginTop:2,color:isRej?'#fff':isPending?'#b08000':'#fff',background:isRej?'rgba(214,48,48,.7)':isPending?'rgba(230,168,0,.15)':m.color,display:'inline-flex',alignItems:'center',gap:3,padding:'1px 7px',borderRadius:10,whiteSpace:'nowrap'}}>
@@ -2161,7 +2196,9 @@ export default function App(){
         await supabase.from('profiles').upsert(renamed.map(p=>({id:p.id,name:p.name,role:p.role})))
         renamed.forEach(p=>{const r=data.find(x=>x.id===p.id);r.name=p.name;r.role=p.role})
       }
-      setProfiles(data.map(r=>({id:r.id,name:r.name,role:r.role||r.name})));setProfilesLoaded(true)}
+      const retired=data.filter(r=>RETIRED_PROFILE_IDS.includes(r.id))
+      if(retired.length)await supabase.from('profiles').delete().in('id',retired.map(r=>r.id))
+      setProfiles(data.filter(r=>!RETIRED_PROFILE_IDS.includes(r.id)).map(r=>({id:r.id,name:r.name,role:r.role||r.name})));setProfilesLoaded(true)}
     else if(!profilesLoaded){const seeds=DEFAULT_PROFILES.map(p=>({id:p.id,name:p.name,role:p.role}));await supabase.from('profiles').upsert(seeds);setProfilesLoaded(true)}
   }
   async function fetchBookings(){
@@ -2195,7 +2232,7 @@ export default function App(){
     setSaving(true)
     // The modal checks clashes against local state, which can be stale; re-check against the database
     const{data:sameDay}=await supabase.from('bookings').select('start_time,end_time,status').eq('profile_id',b.profileId).eq('date',b.date)
-    if(sameDay?.some(x=>(x.status||'pending')!=='rejected'&&olap(b.startTime,b.endTime,x.start_time,x.end_time))){
+    if(sameDay?.some(x=>!['rejected','cancelled'].includes(x.status||'pending')&&olap(b.startTime,b.endTime,x.start_time,x.end_time))){
       setSaving(false);await fetchBookings()
       setToast({msg:`${profiles.find(p=>p.id===b.profileId)?.name||'This slot'} was just booked for this time. Please choose another slot.`,type:'pending'})
       return false
@@ -2339,10 +2376,10 @@ export default function App(){
           </div>
           <span style={{fontFamily:'Syne,sans-serif',fontSize:'1.35rem',fontWeight:800,color:'#1a1714',letterSpacing:'-.4px'}}>SlotBook</span>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:9,flex:1,justifyContent:'center',maxWidth:320}}>
+        <div className="hdr-search" style={{display:'flex',alignItems:'center',gap:9,flex:1,justifyContent:'center',maxWidth:320}}>
           <SearchBar bookings={bookings} profiles={profiles} onResult={b=>{setSearchQ(b.bookedBy);setProfileId(b.profileId);const d=parseDate(b.date);setCalYear(d.getFullYear());setCalMonth(d.getMonth());setViewDate(d);setViewMode('month')}} onClear={()=>setSearchQ('')}/>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:9}}>
+        <div className="hdr-actions" style={{display:'flex',alignItems:'center',gap:9}}>
           <ThemePicker theme={theme} setTheme={setTheme}/>
           <DragProfileSwitcher profiles={profiles} selected={profileId} onSelect={pid=>setProfileId(pid)}/>
           {userName&&<div style={{display:'flex',background:'rgba(255,255,255,.72)',border:'1px solid rgba(200,192,178,.4)',borderRadius:20,padding:'4px 10px 4px 6px',fontSize:12,color:'rgba(90,82,72,.78)',alignItems:'center',gap:6}}>
@@ -2360,7 +2397,7 @@ export default function App(){
 
       <NoticeBanner notices={notices} onClickNotice={n=>setNoticeDetail(n)}/>
 
-      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+      <div className="app-body" style={{display:'flex',flex:1,overflow:'hidden'}}>
         {/* Sidebar */}
         <aside className="sidebar">
           {curProfile&&<div style={{background:'linear-gradient(135deg,rgba(194,105,42,.08),rgba(30,160,120,.05))',border:'1px solid rgba(194,105,42,.18)',borderRadius:12,padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
@@ -2392,7 +2429,7 @@ export default function App(){
         </aside>
 
         {/* Main */}
-        <main style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',padding:'1.25rem 1.5rem'}}>
+        <main className="app-main" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',padding:'1.25rem 1.5rem'}}>
           <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:'1rem',flexWrap:'wrap',flexShrink:0}}>
             <button className="btn-soft" onClick={goToday} style={{padding:'8px 16px',borderRadius:8,fontSize:12,fontWeight:600}}>Today</button>
             <div style={{display:'flex',gap:5}}>
@@ -2414,7 +2451,7 @@ export default function App(){
           </div>
           {loading?<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:300,gap:12,color:'rgba(90,82,72,.5)',fontSize:14}}><span className="spinner"/> Loading…</div>
           :viewMode==='month'?<div style={{flex:1,overflowY:'auto'}}><MonthView year={calYear} month={calMonth} bookings={bookings} profileId={profileId} onDayClick={onDayClick} searchHighlight={searchQ}/></div>
-          :<div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}><TimeGrid dates={viewMode==='week'?weekDates:dayDates} bookings={bookings} profileId={profileId} onHourClick={(ds,h,d)=>handleBook(ds,h)}/></div>}
+          :<div className="tg-wrap" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}><TimeGrid dates={viewMode==='week'?weekDates:dayDates} bookings={bookings} profileId={profileId} onHourClick={(ds,h,d)=>handleBook(ds,h)}/></div>}
         </main>
       </div>
     </div>
