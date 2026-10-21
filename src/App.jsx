@@ -532,19 +532,22 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
   const[title,setTitle]=useState('')
   const[rounds,setRounds]=useState('')
   const[desc,setDesc]=useState('')
-  const profile=profiles.find(p=>p.id===profileId)
-  const profB=bookings.filter(b=>b.profileId===profileId&&(b.status||'pending')!=='rejected')
+  const[pid,setPid]=useState(profileId)
+  const profile=profiles.find(p=>p.id===pid)
   const isIST=selectedTZ==='Asia/Kolkata'
   const tzInfo=TIMEZONES.find(z=>z.tz===selectedTZ)||TIMEZONES[0]
   const istStart=isIST?start:convertTimeTZ(start,selectedTZ,'Asia/Kolkata')
   const istEnd=isIST?end:convertTimeTZ(end,selectedTZ,'Asia/Kolkata')
   const endErr=end&&start&&tmins(end)<=tmins(start)
-  const clash=!endErr&&istStart&&istEnd&&profB.some(b=>b.date===date&&olap(istStart,istEnd,b.startTime,b.endTime))
+  const takenBy=id=>!endErr&&istStart&&istEnd&&bookings.some(b=>b.profileId===id&&(b.status||'pending')!=='rejected'&&b.date===date&&olap(istStart,istEnd,b.startTime,b.endTime))
+  const clash=takenBy(pid)
+  // When the chosen slot is taken, point the user at a slot that is still free for this time
+  const freeProfiles=clash?profiles.filter(p=>p.id!==pid&&!takenBy(p.id)):[]
   const canBook=!!date&&!!title.trim()&&!endErr&&!clash
   const m=TC[type]
   function submit(){
     if(!canBook||saving)return
-    onBook({id:uid(),date,startTime:istStart,endTime:istEnd,type,title:title.trim(),rounds:rounds.trim(),desc:desc.trim(),bookedBy:userName,userPhone:userPhone||'',profileId,status:'pending'})
+    onBook({id:uid(),date,startTime:istStart,endTime:istEnd,type,title:title.trim(),rounds:rounds.trim(),desc:desc.trim(),bookedBy:userName,userPhone:userPhone||'',profileId:pid,status:'pending'})
   }
   return<div className="overlay open" onClick={e=>e.target===e.currentTarget&&onClose()}>
     <div className="card" style={{width:'100%',maxWidth:520,overflow:'hidden',display:'flex',flexDirection:'column',maxHeight:'92vh',animation:'scaleIn .28s ease both'}}>
@@ -559,7 +562,10 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
       </div>
       <div style={{overflowY:'auto',flex:1,padding:'1.5rem 1.8rem',display:'flex',flexDirection:'column',gap:16,background:'rgba(255,255,255,.35)'}}>
         <div style={{background:'rgba(200,140,30,.08)',border:'1px solid rgba(200,140,30,.25)',borderRadius:10,padding:'10px 14px',fontSize:12,color:'#8a5e12'}}>ℹ️ Booking shows as <strong>Pending</strong> until admin approves.</div>
-        {clash&&!endErr&&<div className="alert-red show">⚠ This time overlaps an existing booking for this profile.</div>}
+        {clash&&!endErr&&<div className="alert-red show" style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+          <span style={{flex:1,minWidth:180}}>⚠ <strong>{profile?.name}</strong> is already booked at this time. {freeProfiles.length?<>Please book on <strong>{freeProfiles.map(p=>p.name).join(' or ')}</strong>.</>:'All slots are booked at this time — please pick another time.'}</span>
+          {freeProfiles.map(p=><button key={p.id} className="btn-dark" onClick={()=>setPid(p.id)} style={{padding:'6px 12px',borderRadius:8,fontSize:12}}>Switch to {p.name} →</button>)}
+        </div>}
         {endErr&&<div className="alert-amber show">⚠ End time must be after start time.</div>}
         <div>
           <label className="lbl">Date</label>
@@ -1075,6 +1081,9 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   const[editType,setEditType]=useState('interview')
   const[editRounds,setEditRounds]=useState('')
   const[editDesc,setEditDesc]=useState('')
+  const[editProfile,setEditProfile]=useState('')
+  const[editStart,setEditStart]=useState('')
+  const[editEnd,setEditEnd]=useState('')
   // Candidates tab state
   const[candSearch,setCandSearch]=useState('')
   const[expandedCand,setExpandedCand]=useState(null)
@@ -1274,10 +1283,17 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   function openEditMod(b){
     setEditMod(b);setEditTitle(b.title);setEditType(b.type||'interview')
     setEditRounds(b.rounds||'');setEditDesc(b.desc||'');setOpenMenu(null)
+    setEditProfile(b.profileId);setEditStart(b.startTime);setEditEnd(b.endTime)
   }
+  // Another active booking on the same slot, date and overlapping time (the edited booking itself excluded)
+  const slotTakenBy=(id,pid,date,s,e)=>bookings.find(b=>b.id!==id&&b.profileId===pid&&b.date===date&&(b.status||'pending')!=='rejected'&&olap(s,e,b.startTime,b.endTime))
+  const editEndErr=editMod&&tmins(editEnd)<=tmins(editStart)
+  const editClash=editMod&&!editEndErr?slotTakenBy(editMod.id,editProfile,editMod.date,editStart,editEnd):null
+  const editFree=editClash?profiles.filter(p=>p.id!==editProfile&&!slotTakenBy(editMod.id,p.id,editMod.date,editStart,editEnd)):[]
+  const canSaveEdit=!!editTitle.trim()&&!editEndErr&&!editClash
   function saveEditMod(){
-    if(!editTitle.trim())return
-    onUpdateBooking(editMod.id,{title:editTitle.trim(),type:editType,rounds:editRounds.trim(),desc:editDesc.trim()})
+    if(!canSaveEdit)return
+    onUpdateBooking(editMod.id,{title:editTitle.trim(),type:editType,rounds:editRounds.trim(),desc:editDesc.trim(),profileId:editProfile,startTime:editStart,endTime:editEnd})
     setEditMod(null)
   }
   function openReschedMod(b){
@@ -1286,9 +1302,13 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
     const e=to12(b.endTime);setReschedEH(e.h);setReschedEM(e.m);setReschedEAP(e.ap)
     setOpenMenu(null)
   }
+  const reschedStart=to24(reschedSH||'12',reschedSM||'00',reschedSAP),reschedEnd=to24(reschedEH||'12',reschedEM||'00',reschedEAP)
+  const reschedEndErr=reschedMod&&tmins(reschedEnd)<=tmins(reschedStart)
+  const reschedClash=reschedMod&&reschedDate&&!reschedEndErr?slotTakenBy(reschedMod.id,reschedMod.profileId,reschedDate,reschedStart,reschedEnd):null
+  const canResched=!!reschedDate&&!reschedEndErr&&!reschedClash
   function saveReschedMod(){
-    if(!reschedDate)return
-    onUpdateBooking(reschedMod.id,{date:reschedDate,startTime:to24(reschedSH,reschedSM,reschedSAP),endTime:to24(reschedEH,reschedEM,reschedEAP)})
+    if(!canResched)return
+    onUpdateBooking(reschedMod.id,{date:reschedDate,startTime:reschedStart,endTime:reschedEnd})
     setReschedMod(null)
   }
 
@@ -1333,6 +1353,21 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
           <div><label className="lbl">Title</label><input className="f-in" value={editTitle} onChange={e=>setEditTitle(e.target.value)} placeholder="Interview title…"/></div>
           <div>
+            <label className="lbl">Slot</label>
+            <div style={{display:'flex',gap:8}}>
+              {profiles.map(p=><button key={p.id} onClick={()=>setEditProfile(p.id)} style={{flex:1,padding:'9px 6px',borderRadius:9,border:`1.5px solid ${editProfile===p.id?'#c2692a':'rgba(200,192,178,.42)'}`,background:editProfile===p.id?'rgba(194,105,42,.08)':'rgba(255,255,255,.6)',color:editProfile===p.id?'#c2692a':'rgba(90,82,72,.52)',fontFamily:'DM Sans,sans-serif',fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .15s'}}>{p.name}</button>)}
+            </div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+            <TimeField key={editMod.id+'s'} label="Start (IST)" value={editStart} onChange={setEditStart}/>
+            <TimeField key={editMod.id+'e'} label="End (IST)" value={editEnd} onChange={setEditEnd}/>
+          </div>
+          {editEndErr&&<div className="alert-amber show">⚠ End time must be after start time.</div>}
+          {editClash&&<div className="alert-red show" style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            <span style={{flex:1,minWidth:180}}>⚠ <strong>{profiles.find(p=>p.id===editProfile)?.name}</strong> is already booked {dTime(editClash.startTime)} – {dTime(editClash.endTime)} by {editClash.bookedBy} ({editClash.title}). {editFree.length?<>Move this to <strong>{editFree.map(p=>p.name).join(' or ')}</strong>.</>:'All slots are booked at this time.'}</span>
+            {editFree.map(p=><button key={p.id} className="btn-dark" onClick={()=>setEditProfile(p.id)} style={{padding:'6px 12px',borderRadius:8,fontSize:12}}>Switch to {p.name} →</button>)}
+          </div>}
+          <div>
             <label className="lbl">Type</label>
             <div style={{display:'flex',gap:8}}>
               {['interview','meeting','other'].map(t=><button key={t} onClick={()=>setEditType(t)} style={{flex:1,padding:'9px 6px',borderRadius:9,border:`1.5px solid ${editType===t?TC[t].border:'rgba(200,192,178,.42)'}`,background:editType===t?TC[t].bg:'rgba(255,255,255,.6)',color:editType===t?TC[t].color:'rgba(90,82,72,.52)',fontFamily:'DM Sans,sans-serif',fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .15s',textTransform:'capitalize'}}>{t}</button>)}
@@ -1342,7 +1377,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
           <div><label className="lbl">Notes / Description</label><textarea className="f-in" rows={3} style={{resize:'vertical'}} value={editDesc} onChange={e=>setEditDesc(e.target.value)} placeholder="Additional notes…"/></div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}}>
             <button className="btn-soft" onClick={()=>setEditMod(null)} style={{padding:'10px 20px',borderRadius:9,fontSize:13}}>Cancel</button>
-            <button className="btn-dark" onClick={saveEditMod} style={{padding:'10px 24px',borderRadius:9,fontSize:13,opacity:editTitle.trim()?1:.4,cursor:editTitle.trim()?'pointer':'not-allowed'}}>Save Changes</button>
+            <button className="btn-dark" onClick={saveEditMod} style={{padding:'10px 24px',borderRadius:9,fontSize:13,opacity:canSaveEdit?1:.4,cursor:canSaveEdit?'pointer':'not-allowed'}}>Save Changes</button>
           </div>
         </div>
       </div>
@@ -1384,9 +1419,11 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
               </div>
             </div>
           </div>
+          {reschedEndErr&&<div className="alert-amber show">⚠ End time must be after start time.</div>}
+          {reschedClash&&<div className="alert-red show">⚠ <strong>{profiles.find(p=>p.id===reschedMod.profileId)?.name}</strong> is already booked {dTime(reschedClash.startTime)} – {dTime(reschedClash.endTime)} by {reschedClash.bookedBy} ({reschedClash.title}). Pick another time, or use Edit Details to move it to another slot.</div>}
           <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}}>
             <button className="btn-soft" onClick={()=>setReschedMod(null)} style={{padding:'10px 20px',borderRadius:9,fontSize:13}}>Cancel</button>
-            <button className="btn-dark" onClick={saveReschedMod} style={{padding:'10px 24px',borderRadius:9,fontSize:13,opacity:reschedDate?1:.4,cursor:reschedDate?'pointer':'not-allowed'}}>Reschedule</button>
+            <button className="btn-dark" onClick={saveReschedMod} style={{padding:'10px 24px',borderRadius:9,fontSize:13,opacity:canResched?1:.4,cursor:canResched?'pointer':'not-allowed'}}>Reschedule</button>
           </div>
         </div>
       </div>
@@ -2156,6 +2193,13 @@ export default function App(){
 
   async function saveBooking(b){
     setSaving(true)
+    // The modal checks clashes against local state, which can be stale; re-check against the database
+    const{data:sameDay}=await supabase.from('bookings').select('start_time,end_time,status').eq('profile_id',b.profileId).eq('date',b.date)
+    if(sameDay?.some(x=>(x.status||'pending')!=='rejected'&&olap(b.startTime,b.endTime,x.start_time,x.end_time))){
+      setSaving(false);await fetchBookings()
+      setToast({msg:`${profiles.find(p=>p.id===b.profileId)?.name||'This slot'} was just booked for this time. Please choose another slot.`,type:'pending'})
+      return false
+    }
     setBookings(prev=>[{...b,createdAt:new Date().toISOString()},...prev])
     const{error}=await supabase.from('bookings').insert([{id:b.id,date:b.date,start_time:b.startTime,end_time:b.endTime,type:b.type,title:b.title,rounds:b.rounds||'',description:b.desc,booked_by:b.bookedBy,user_phone:b.userPhone||'',profile_id:b.profileId,status:'pending'}])
     setSaving(false)
@@ -2173,6 +2217,7 @@ export default function App(){
     if(updates.date!==undefined)dbMap.date=updates.date
     if(updates.startTime!==undefined)dbMap.start_time=updates.startTime
     if(updates.endTime!==undefined)dbMap.end_time=updates.endTime
+    if(updates.profileId!==undefined)dbMap.profile_id=updates.profileId
     await supabase.from('bookings').update(dbMap).eq('id',id)
   }
   async function approveBooking(id){setBookings(prev=>prev.map(b=>b.id===id?{...b,status:'approved'}:b));await supabase.from('bookings').update({status:'approved'}).eq('id',id)}
@@ -2274,7 +2319,7 @@ export default function App(){
     <div className="orb orb1"/><div className="orb orb2"/><div className="orb orb3"/>
     {toast&&<Toast {...toast} onClose={()=>setToast(null)}/>}
     {showName&&<NameModal onSave={onNameSaved} onClose={()=>{setShowName(false);pendingDay.current=null;pendingHour.current=null;pendingProf.current=null}}/>}
-    {bookMod&&<BookModal prefillDate={bookMod.prefillDate} prefillHour={bookMod.prefillHour} profileId={bookMod.profileId||profileId} profiles={profiles} bookings={bookings} userName={userName} userPhone={userPhone} onBook={async b=>{await saveBooking(b);setBookMod(null)}} onClose={()=>setBookMod(null)} saving={saving} selectedTZ={selectedTZ}/>}
+    {bookMod&&<BookModal prefillDate={bookMod.prefillDate} prefillHour={bookMod.prefillHour} profileId={bookMod.profileId||profileId} profiles={profiles} bookings={bookings} userName={userName} userPhone={userPhone} onBook={async b=>{if(await saveBooking(b)!==false)setBookMod(null)}} onClose={()=>setBookMod(null)} saving={saving} selectedTZ={selectedTZ}/>}
     {dayMod&&<DayModal dateStr={dayMod.ds} bookings={bookings} profileId={profileId} userName={userName} onBookHere={bookFromDay} onClose={()=>setDayMod(null)} onCancelRequest={b=>setCancelMod(b)}/>}
     {cancelMod&&<CancelModal booking={cancelMod} userName={userName} profiles={profiles} onCancel={cancelBooking} onClose={()=>setCancelMod(null)}/>}
     {noticeDetail&&<NoticeModal notice={noticeDetail} onClose={()=>setNoticeDetail(null)}/>}
