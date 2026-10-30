@@ -534,7 +534,6 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
   const[type,setType]=useState('interview')
   const[title,setTitle]=useState('')
   const[rounds,setRounds]=useState('')
-  const[desc,setDesc]=useState('')
   const[pid,setPid]=useState(profileId)
   const profile=profiles.find(p=>p.id===pid)
   const isIST=selectedTZ==='Asia/Kolkata'
@@ -550,7 +549,7 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
   const m=TC[type]
   function submit(){
     if(!canBook||saving)return
-    onBook({id:uid(),date,startTime:istStart,endTime:istEnd,type,title:title.trim(),rounds:rounds.trim(),desc:desc.trim(),bookedBy:userName,userPhone:userPhone||'',profileId:pid,status:'pending'})
+    onBook({id:uid(),date,startTime:istStart,endTime:istEnd,type,title:title.trim(),rounds:rounds.trim(),desc:'',bookedBy:userName,userPhone:userPhone||'',profileId:pid,status:'pending'})
   }
   return<div className="overlay open" onClick={e=>e.target===e.currentTarget&&onClose()}>
     <div className="card" style={{width:'100%',maxWidth:520,overflow:'hidden',display:'flex',flexDirection:'column',maxHeight:'92vh',animation:'scaleIn .28s ease both'}}>
@@ -602,10 +601,6 @@ function BookModal({prefillDate,prefillHour,bookings,userName,userPhone,profileI
         <div>
           <label className="lbl">Rounds <span style={{fontStyle:'italic',textTransform:'none',letterSpacing:0,color:'rgba(90,82,72,.3)',fontWeight:400}}>(optional)</span></label>
           <textarea className="f-in" rows={3} style={{resize:'vertical'}} placeholder="Round 1, Round 2, Client…" value={rounds} onChange={e=>setRounds(e.target.value)}/>
-        </div>
-        <div>
-          <label className="lbl">Description <span style={{fontStyle:'italic',textTransform:'none',letterSpacing:0,color:'rgba(90,82,72,.3)',fontWeight:400}}>(optional)</span></label>
-          <textarea className="f-in" rows={3} style={{resize:'vertical'}} placeholder="Agenda, notes…" value={desc} onChange={e=>setDesc(e.target.value)}/>
         </div>
         <div style={{borderRadius:12,padding:'14px 16px',background:m.bg,border:`1px solid ${m.border}`}}>
           <div style={{fontSize:10,color:'rgba(90,82,72,.4)',textTransform:'uppercase',letterSpacing:1,fontWeight:700,marginBottom:6,fontFamily:'Syne,sans-serif'}}>Summary</div>
@@ -1090,7 +1085,6 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   const[editTitle,setEditTitle]=useState('')
   const[editType,setEditType]=useState('interview')
   const[editRounds,setEditRounds]=useState('')
-  const[editDesc,setEditDesc]=useState('')
   const[editProfile,setEditProfile]=useState('')
   const[editStart,setEditStart]=useState('')
   const[editEnd,setEditEnd]=useState('')
@@ -1302,7 +1296,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   }
   function openEditMod(b){
     setEditMod(b);setEditTitle(b.title);setEditType(b.type||'interview')
-    setEditRounds(b.rounds||'');setEditDesc(b.desc||'');setOpenMenu(null)
+    setEditRounds(b.rounds||'');setOpenMenu(null)
     setEditProfile(b.profileId);setEditStart(b.startTime);setEditEnd(b.endTime)
   }
   // Another active booking on the same slot, date and overlapping time (the edited booking itself excluded)
@@ -1313,7 +1307,7 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
   const canSaveEdit=!!editTitle.trim()&&!editEndErr&&!editClash
   function saveEditMod(){
     if(!canSaveEdit)return
-    onUpdateBooking(editMod.id,{title:editTitle.trim(),type:editType,rounds:editRounds.trim(),desc:editDesc.trim(),profileId:editProfile,startTime:editStart,endTime:editEnd})
+    onUpdateBooking(editMod.id,{title:editTitle.trim(),type:editType,rounds:editRounds.trim(),profileId:editProfile,startTime:editStart,endTime:editEnd})
     setEditMod(null)
   }
   function openReschedMod(b){
@@ -1401,7 +1395,6 @@ function AdminPanel({bookings,profiles,notices,onDelete,onApprove,onReject,onUpd
             </div>
           </div>
           <div><label className="lbl">Rounds</label><input className="f-in" value={editRounds} onChange={e=>setEditRounds(e.target.value)} placeholder="e.g. L2 round, Final…"/></div>
-          <div><label className="lbl">Notes / Description</label><textarea className="f-in" rows={3} style={{resize:'vertical'}} value={editDesc} onChange={e=>setEditDesc(e.target.value)} placeholder="Additional notes…"/></div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}}>
             <button className="btn-soft" onClick={()=>setEditMod(null)} style={{padding:'10px 20px',borderRadius:9,fontSize:13}}>Cancel</button>
             <button className="btn-dark" onClick={saveEditMod} style={{padding:'10px 24px',borderRadius:9,fontSize:13,opacity:canSaveEdit?1:.4,cursor:canSaveEdit?'pointer':'not-allowed'}}>Save Changes</button>
